@@ -1145,6 +1145,136 @@
       z-index: 500;
       opacity: 0;
     }
+
+    /* ══════════════════════════════════════════════
+       MOBILE — portrait phones (≤ 600px)
+    ══════════════════════════════════════════════ */
+    @media (max-width: 600px) {
+
+      /* ── Splash ── */
+      #splash { padding: 0 20px; }
+
+      .splash-orb {
+        width: 100px; height: 100px;
+        margin-bottom: 22px;
+      }
+      .orb-ring.r1 { width: 38px;  height: 38px;  margin-top: -19px; margin-left: -19px; }
+      .orb-ring.r2 { width: 70px;  height: 70px;  margin-top: -35px; margin-left: -35px; }
+      .orb-ring.r3 { width: 100px; height: 100px; margin-top: -50px; margin-left: -50px; }
+
+      .splash-title {
+        font-size: 52px;
+        letter-spacing: 0.14em;
+        margin-bottom: 10px;
+      }
+      .splash-tagline {
+        font-size: 12px;
+        margin-bottom: 24px;
+      }
+      .splash-eyebrow { margin-bottom: 16px; }
+
+      .splash-stats { margin-bottom: 16px; }
+      .stat-chip { padding: 10px 16px; }
+      .stat-chip-value { font-size: 17px; }
+      .stat-chip-label { font-size: 8px; }
+
+      .splash-music {
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 14px;
+        margin-bottom: 24px;
+      }
+      .splash-wave-icon { height: 22px; margin-top: 2px; }
+      .wbar:nth-child(1) { height: 6px; }
+      .wbar:nth-child(2) { height: 12px; }
+      .wbar:nth-child(3) { height: 18px; }
+      .wbar:nth-child(4) { height: 22px; }
+      .wbar:nth-child(5) { height: 16px; }
+      .wbar:nth-child(6) { height: 10px; }
+      .wbar:nth-child(7) { height: 6px; }
+      .splash-music-title { font-size: 12px; }
+      .splash-music-desc { font-size: 11px; margin-bottom: 8px; }
+      .splash-genre-tags span { font-size: 8px; padding: 3px 7px; }
+
+      #splash-enter {
+        padding: 14px 28px 14px 32px;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+      }
+
+      .splash-credit { font-size: 9px; bottom: 16px; }
+
+      /* ── Camera presets — scrollable horizontal strip ── */
+      #camera-presets {
+        top: 10px;
+        left: 0; right: 0;
+        transform: none;
+        justify-content: flex-start;
+        overflow-x: auto;
+        padding: 0 10px;
+        gap: 5px;
+        scrollbar-width: none;
+      }
+      #camera-presets::-webkit-scrollbar { display: none; }
+      .cam-btn {
+        font-size: 9px;
+        letter-spacing: 0.06em;
+        padding: 6px 10px;
+        flex-shrink: 0;
+      }
+
+      /* ── Theme picker — horizontal row just below presets ── */
+      #theme-picker {
+        top: 46px;
+        left: 0;
+        max-width: 100vw;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 10px;
+        padding: 4px 10px;
+        scrollbar-width: none;
+      }
+      #theme-picker::-webkit-scrollbar { display: none; }
+      .theme-btn { width: 18px; height: 18px; flex-shrink: 0; }
+      .theme-btn::after { top: 26px; bottom: auto; }
+
+      /* ── Fullscreen + screenshot buttons ── */
+      #btn-fullscreen { top: 10px; right: 10px; width: 28px; height: 28px; }
+      #btn-screenshot { top: 46px; right: 10px; width: 28px; height: 28px; }
+
+      /* ── HUD — smaller, keep bottom-left ── */
+      #hud {
+        font-size: 10px;
+        padding: 9px 12px 8px;
+        bottom: 10px;
+      }
+      .hud-title { font-size: 8px; margin-bottom: 7px; }
+      .hud-row { gap: 14px; margin-top: 4px; }
+
+      /* ── Hint — hide on mobile (too verbose) ── */
+      #hint { display: none; }
+
+      /* ── Music panel — full width ── */
+      #music-panel {
+        width: calc(100vw - 20px);
+        left: 10px;
+        transform: translateY(-8px);
+        top: 48px;
+        padding: 16px;
+      }
+      #music-panel.open { transform: translateY(0); }
+
+      /* ── Tour card ── */
+      #tour-card {
+        bottom: 58px;
+        max-width: calc(100vw - 32px);
+        padding: 18px 20px 14px;
+      }
+
+      /* ── Scrub label ── */
+      #scrub-label { font-size: 10px; top: 8px; }
+    }
   </style>
 </head>
 <body>
