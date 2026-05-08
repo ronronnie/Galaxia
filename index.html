@@ -1,0 +1,3744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GALAXIA — Procedural Spiral Galaxy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    canvas { display: block; cursor: crosshair; }
+
+    /* ── Travel ripple ── */
+    @keyframes travel-ripple-out {
+      0%   { width: 6px;  height: 6px;  opacity: 0.90; }
+      100% { width: 52px; height: 52px; opacity: 0;    }
+    }
+
+    .travel-ripple {
+      position: fixed;
+      border: 1.5px solid rgba(100, 190, 255, 0.75);
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      animation: travel-ripple-out 0.70s ease-out forwards;
+      z-index: 200;
+    }
+
+    /* ── HUD ── */
+    #hud {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.42);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-left: 2px solid rgba(100, 160, 255, 0.30);
+      border-radius: 8px;
+      padding: 12px 16px 11px;
+      font: 11px/1 'Courier New', monospace;
+      letter-spacing: 0.05em;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .hud-title {
+      font-size: 9px;
+      letter-spacing: 0.20em;
+      color: rgba(100, 160, 255, 0.45);
+      margin-bottom: 9px;
+      text-transform: uppercase;
+    }
+
+    .hud-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 22px;
+      margin-top: 5px;
+    }
+
+    .hud-label { color: rgba(255, 255, 255, 0.25); }
+
+    .hud-value {
+      color: rgba(255, 255, 255, 0.72);
+      text-align: right;
+      min-width: 42px;
+    }
+
+    .hud-value.accent { color: rgba(100, 200, 255, 0.80); }
+
+    /* ── Top hint ── */
+    #hint {
+      position: fixed;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.20);
+      font: 12px/1 -apple-system, BlinkMacSystemFont, sans-serif;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+      transition: opacity 2.5s ease;
+    }
+    #hint.hidden { opacity: 0; }
+
+    /* ── Theme picker ── */
+    #theme-picker {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-start;
+      max-width: 180px;
+      z-index: 10;
+    }
+
+    .theme-btn {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.18);
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      transition: transform 0.2s, border-color 0.25s, box-shadow 0.25s;
+      position: relative;
+    }
+
+    .theme-btn::after {
+      content: attr(title);
+      position: absolute;
+      top: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.70);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.75);
+      font: 10px/1 'Courier New', monospace;
+      letter-spacing: 0.08em;
+      padding: 4px 9px;
+      border-radius: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .theme-btn:hover::after { opacity: 1; }
+
+    .theme-btn:hover {
+      transform: scale(1.35);
+      border-color: rgba(255,255,255,0.55);
+    }
+
+    .theme-btn.active {
+      border-color: rgba(255,255,255,0.88);
+      box-shadow: 0 0 7px rgba(255,255,255,0.40), 0 0 0 2px rgba(255,255,255,0.10);
+      transform: scale(1.18);
+    }
+
+    /* ── Camera preset buttons ── */
+    #camera-presets {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      z-index: 10;
+    }
+
+    .cam-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      border-radius: 20px;
+      color: rgba(255, 255, 255, 0.38);
+      font: 10px/1 'Courier New', monospace;
+      letter-spacing: 0.10em;
+      padding: 7px 15px;
+      cursor: pointer;
+      text-transform: uppercase;
+      white-space: nowrap;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+
+    .cam-btn:hover {
+      background: rgba(255, 255, 255, 0.10);
+      border-color: rgba(255, 255, 255, 0.24);
+      color: rgba(255, 255, 255, 0.75);
+    }
+
+    .cam-btn.active {
+      background: rgba(100, 160, 255, 0.12);
+      border-color: rgba(100, 160, 255, 0.38);
+      color: rgba(130, 200, 255, 0.90);
+    }
+
+    /* ── Time scrub bar ── */
+    #scrub-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.06);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 200;
+    }
+    #scrub-bar.show { opacity: 1; }
+
+    #scrub-cursor {
+      position: absolute;
+      top: -2px;
+      width: 4px; height: 6px;
+      background: rgba(100, 200, 255, 0.90);
+      border-radius: 2px;
+      transform: translateX(-50%);
+      box-shadow: 0 0 8px rgba(100, 200, 255, 0.80);
+    }
+
+    #scrub-label {
+      position: fixed;
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(100, 200, 255, 0.82);
+      font: 11px/1 'Courier New', monospace;
+      letter-spacing: 0.12em;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 200;
+      white-space: nowrap;
+    }
+    #scrub-label.show { opacity: 1; }
+
+    /* ── Toast notification ── */
+    #toast {
+      position: fixed;
+      bottom: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.80);
+      font: 12px/1 'Courier New', monospace;
+      letter-spacing: 0.08em;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 7px 18px;
+      border-radius: 20px;
+      pointer-events: none;
+      user-select: none;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Fullscreen button ── */
+    #btn-fullscreen {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 7px;
+      color: rgba(255, 255, 255, 0.45);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+      z-index: 10;
+    }
+    #btn-fullscreen:hover {
+      background: rgba(255, 255, 255, 0.11);
+      border-color: rgba(255, 255, 255, 0.25);
+      color: rgba(255, 255, 255, 0.80);
+    }
+    #btn-fullscreen svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+
+    /* ── Screenshot button ── */
+    #btn-screenshot {
+      position: fixed;
+      top: 57px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 7px;
+      color: rgba(255, 255, 255, 0.45);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+      z-index: 10;
+    }
+    #btn-screenshot:hover {
+      background: rgba(255, 255, 255, 0.11);
+      border-color: rgba(255, 255, 255, 0.25);
+      color: rgba(255, 255, 255, 0.80);
+    }
+    #btn-screenshot.flash {
+      background: rgba(255, 255, 255, 0.30);
+      border-color: rgba(255, 255, 255, 0.55);
+      color: rgba(255, 255, 255, 1.0);
+    }
+    #btn-screenshot svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ── Custom cursor ── */
+    * { cursor: none !important; }
+
+    #cursor-dot {
+      position: fixed;
+      top: 0; left: 0;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.96);
+      /* Blue glow + thin dark halo so it's visible over bright areas */
+      box-shadow: 0 0 8px 3px rgba(120, 190, 255, 0.70),
+                  0 0 0 1.5px rgba(0, 0, 0, 0.65);
+      pointer-events: none;
+      z-index: 9999;
+      will-change: transform;
+      transition: width 0.2s, height 0.2s, box-shadow 0.2s;
+      opacity: 0;
+    }
+
+    #cursor-ring {
+      position: fixed;
+      top: 0; left: 0;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      /* Slightly brighter border + dark outer outline for contrast on bright backgrounds */
+      border: 1.5px solid rgba(255, 255, 255, 0.65);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+      z-index: 9998;
+      will-change: transform;
+      transition: border-color 0.35s ease, box-shadow 0.35s ease, width 0.28s ease, height 0.28s ease;
+      opacity: 0;
+    }
+
+    body.cursor-pointer #cursor-dot {
+      width: 8px; height: 8px;
+      box-shadow: 0 0 10px 4px rgba(140, 210, 255, 0.80),
+                  0 0 0 1.5px rgba(0, 0, 0, 0.55);
+    }
+    body.cursor-pointer #cursor-ring {
+      width: 18px; height: 18px;
+      border-color: rgba(140, 200, 255, 0.80);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+    }
+    body.cursor-star #cursor-dot {
+      box-shadow: 0 0 14px 5px rgba(255, 220, 120, 0.85),
+                  0 0 0 1.5px rgba(0, 0, 0, 0.55);
+    }
+    body.cursor-star #cursor-ring {
+      width: 38px; height: 38px;
+      border-color: rgba(255, 210, 80, 0.70);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.40);
+    }
+
+    /* ── Screenshot capture flash ── */
+    #capture-flash {
+      position: fixed;
+      inset: 0;
+      background: #fff;
+      pointer-events: none;
+      z-index: 900;
+      opacity: 0;
+      transition: opacity 0.08s ease-in;
+    }
+    #capture-flash.pop {
+      opacity: 0.18;
+      transition: none;
+    }
+
+    /* ── Paused badge ── */
+    #paused-badge {
+      position: fixed;
+      top: 98px;
+      right: 16px;
+      color: rgba(255, 200, 80, 0.75);
+      font: 11px/1 'Courier New', monospace;
+      letter-spacing: 0.14em;
+      pointer-events: none;
+      user-select: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    #paused-badge.show { opacity: 1; }
+
+    /* ── Help overlay ── */
+    #help {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 10px;
+      padding: 14px 18px;
+      color: rgba(255, 255, 255, 0.55);
+      font: 11px/1.9 'Courier New', monospace;
+      letter-spacing: 0.06em;
+      pointer-events: none;
+      user-select: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    #help.show { opacity: 1; }
+
+    #help .help-title {
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      color: rgba(255, 255, 255, 0.30);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    #help .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    #help kbd {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 4px;
+      padding: 0 5px;
+      font: inherit;
+      min-width: 18px;
+      text-align: center;
+    }
+
+    /* ── ? hint (bottom right corner) ── */
+    #help-hint {
+      position: fixed;
+      bottom: 16px;
+      right: 20px;
+      color: rgba(255, 255, 255, 0.22);
+      font: 11px/1 'Courier New', monospace;
+      letter-spacing: 0.06em;
+      pointer-events: none;
+      user-select: none;
+      transition: opacity 0.3s ease;
+    }
+    #help-hint.hidden { opacity: 0; }
+
+    /* ── Star info tooltip ── */
+    #star-tip {
+      position: fixed;
+      display: none;
+      pointer-events: none;
+      user-select: none;
+      background: rgba(2, 4, 14, 0.84);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 9px;
+      padding: 10px 14px;
+      font: 11px/1 'Courier New', monospace;
+      letter-spacing: 0.07em;
+      z-index: 150;
+      min-width: 130px;
+    }
+
+    #star-tip-cls {
+      font-size: 24px;
+      letter-spacing: 0;
+      line-height: 1;
+      margin-bottom: 9px;
+      text-shadow: 0 0 14px currentColor;
+    }
+
+    .tip-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 5px;
+    }
+
+    .tip-lbl { color: rgba(255, 255, 255, 0.26); }
+    .tip-val { color: rgba(255, 255, 255, 0.78); text-align: right; }
+
+    /* ── Splash Screen ── */
+    /* ── Splash screen ── */
+    #splash {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at 50% 42%, rgba(10,7,40,0.94) 0%, rgba(3,3,16,0.97) 55%, rgba(0,0,0,0.99) 100%);
+      transition: opacity 1.4s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+    #splash.fade-out { opacity: 0; pointer-events: none; }
+
+    /* Star field dots */
+    #splash::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(1.5px 1.5px at 8%  12%, rgba(255,255,255,0.60) 0%, transparent 100%),
+        radial-gradient(1px   1px   at 20%  5%, rgba(255,255,255,0.40) 0%, transparent 100%),
+        radial-gradient(2px   2px   at 33% 78%, rgba(255,255,255,0.45) 0%, transparent 100%),
+        radial-gradient(1px   1px   at 45% 22%, rgba(200,220,255,0.50) 0%, transparent 100%),
+        radial-gradient(1.5px 1.5px at 60%  8%, rgba(255,255,255,0.35) 0%, transparent 100%),
+        radial-gradient(1px   1px   at 72% 55%, rgba(255,255,255,0.55) 0%, transparent 100%),
+        radial-gradient(2px   2px   at 85% 18%, rgba(220,230,255,0.40) 0%, transparent 100%),
+        radial-gradient(1px   1px   at 92% 72%, rgba(255,255,255,0.45) 0%, transparent 100%),
+        radial-gradient(1.5px 1.5px at 15% 45%, rgba(255,255,255,0.30) 0%, transparent 100%),
+        radial-gradient(1px   1px   at 28% 90%, rgba(200,215,255,0.50) 0%, transparent 100%),
+        radial-gradient(1px   1px   at 55% 60%, rgba(255,255,255,0.35) 0%, transparent 100%),
+        radial-gradient(2px   2px   at 78% 35%, rgba(255,255,255,0.28) 0%, transparent 100%),
+        radial-gradient(1px   1px   at  5% 65%, rgba(220,230,255,0.42) 0%, transparent 100%),
+        radial-gradient(1px   1px   at 68% 85%, rgba(255,255,255,0.50) 0%, transparent 100%),
+        radial-gradient(1px   1px   at 90% 48%, rgba(200,220,255,0.36) 0%, transparent 100%),
+        radial-gradient(1.5px 1.5px at 38% 32%, rgba(255,255,255,0.22) 0%, transparent 100%);
+      pointer-events: none;
+    }
+
+    /* Orbital rings visual */
+    .splash-orb {
+      position: relative;
+      width: 160px;
+      height: 160px;
+      margin-bottom: 40px;
+      flex-shrink: 0;
+    }
+    .orb-core {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: rgba(210, 235, 255, 0.98);
+      box-shadow: 0 0 18px 5px rgba(120,180,255,0.75), 0 0 55px 14px rgba(80,140,255,0.28);
+      animation: core-breathe 3.5s ease-in-out infinite;
+      z-index: 2;
+    }
+    @keyframes core-breathe {
+      0%, 100% { box-shadow: 0 0 18px 5px rgba(120,180,255,0.75), 0 0 55px 14px rgba(80,140,255,0.28); }
+      50%       { box-shadow: 0 0 28px 8px rgba(150,210,255,0.90), 0 0 85px 24px rgba(80,140,255,0.40); }
+    }
+
+    .orb-ring {
+      position: absolute;
+      top: 50%; left: 50%;
+      border-radius: 50%;
+      transform-origin: center;
+    }
+    .orb-ring.r1 {
+      width: 60px; height: 60px;
+      border: 1px solid rgba(100,180,255,0.32);
+      margin-top: -30px; margin-left: -30px;
+      animation: spin-cw 9s linear infinite;
+    }
+    .orb-ring.r1::before {
+      content: ''; position: absolute;
+      top: -2.5px; left: calc(50% - 2.5px);
+      width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(140,210,255,0.95);
+      box-shadow: 0 0 8px rgba(120,190,255,0.9);
+    }
+    .orb-ring.r2 {
+      width: 108px; height: 108px;
+      border: 1px solid rgba(150,110,255,0.22);
+      margin-top: -54px; margin-left: -54px;
+      animation: spin-ccw 15s linear infinite;
+    }
+    .orb-ring.r2::before {
+      content: ''; position: absolute;
+      bottom: -2px; right: calc(30% - 2px);
+      width: 4px; height: 4px; border-radius: 50%;
+      background: rgba(190,150,255,0.90);
+      box-shadow: 0 0 6px rgba(170,130,255,0.85);
+    }
+    .orb-ring.r3 {
+      width: 158px; height: 158px;
+      border: 1px solid rgba(80,150,255,0.13);
+      margin-top: -79px; margin-left: -79px;
+      animation: spin-cw 24s linear infinite;
+    }
+    @keyframes spin-cw  { to { transform: rotate(360deg); } }
+    @keyframes spin-ccw { to { transform: rotate(-360deg); } }
+
+    /* Content */
+    .splash-content { text-align: center; position: relative; z-index: 1; }
+
+    .splash-eyebrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 22px;
+      animation: splash-fade-up 0.8s cubic-bezier(0.2,0,0,1) 0.2s both;
+    }
+    .splash-badge {
+      font: 9px/1 'Courier New', monospace;
+      letter-spacing: 0.20em;
+      color: rgba(120,180,255,0.68);
+      text-transform: uppercase;
+      background: rgba(80,130,255,0.09);
+      border: 1px solid rgba(100,160,255,0.20);
+      border-radius: 5px;
+      padding: 5px 10px;
+    }
+    .splash-badge-dot {
+      width: 3px; height: 3px;
+      border-radius: 50%;
+      background: rgba(100,160,255,0.28);
+      flex-shrink: 0;
+    }
+
+    .splash-title {
+      font: 700 96px/1 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      letter-spacing: 0.20em;
+      background: linear-gradient(175deg, #ffffff 0%, rgba(180,220,255,0.88) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 14px;
+      animation: splash-fade-up 0.9s cubic-bezier(0.2,0,0,1) 0.35s both;
+    }
+    .splash-tagline {
+      font: 300 14px/1.7 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      letter-spacing: 0.05em;
+      color: rgba(200,215,255,0.38);
+      margin-bottom: 36px;
+      animation: splash-fade-up 0.9s cubic-bezier(0.2,0,0,1) 0.50s both;
+    }
+
+    /* Stat chips */
+    .splash-stats {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      margin-bottom: 46px;
+      animation: splash-fade-up 0.9s cubic-bezier(0.2,0,0,1) 0.62s both;
+    }
+    .stat-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 13px 26px;
+      border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.025);
+      gap: 6px;
+    }
+    .stat-chip + .stat-chip { border-left: none; }
+    .stat-chip:first-child { border-radius: 10px 0 0 10px; }
+    .stat-chip:last-child  { border-radius: 0 10px 10px 0; }
+    .stat-chip-value {
+      font: 700 20px/1 'Space Grotesk', sans-serif;
+      letter-spacing: 0.04em;
+      color: rgba(255,255,255,0.88);
+    }
+    .stat-chip-label {
+      font: 9px/1 'Courier New', monospace;
+      letter-spacing: 0.18em;
+      color: rgba(120,180,255,0.48);
+      text-transform: uppercase;
+    }
+
+    @keyframes splash-fade-up {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Enter button */
+    #splash-enter {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, rgba(55,105,215,0.55) 0%, rgba(38,75,175,0.48) 100%);
+      border: 1px solid rgba(100,170,255,0.42);
+      border-radius: 50px;
+      color: rgba(255,255,255,0.92);
+      font: 600 11px/1 'Space Grotesk', 'Courier New', monospace;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      padding: 17px 40px 17px 44px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+      animation: splash-fade-up 0.9s cubic-bezier(0.2,0,0,1) 0.90s both;
+      box-shadow: 0 0 40px rgba(55,105,215,0.22), inset 0 1px 0 rgba(255,255,255,0.10);
+    }
+    #splash-enter::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(100,170,255,0.18) 0%, transparent 65%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #splash-enter:hover {
+      border-color: rgba(140,200,255,0.65);
+      background: linear-gradient(135deg, rgba(70,125,235,0.65) 0%, rgba(50,95,205,0.58) 100%);
+      box-shadow: 0 0 60px rgba(80,140,255,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+    #splash-enter:hover::before { opacity: 1; }
+    #splash-enter svg {
+      width: 16px; height: 16px;
+      fill: none; stroke: currentColor;
+      stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+      transition: transform 0.3s cubic-bezier(0.2,0,0,1);
+      flex-shrink: 0;
+    }
+    #splash-enter:hover svg { transform: translateX(5px); }
+
+    /* Music sync feature card */
+    .splash-music {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      background: rgba(80,140,255,0.055);
+      border: 1px solid rgba(100,160,255,0.16);
+      border-radius: 14px;
+      padding: 15px 20px;
+      margin-bottom: 40px;
+      animation: splash-fade-up 0.9s cubic-bezier(0.2,0,0,1) 0.72s both;
+      max-width: 460px;
+      width: 100%;
+      text-align: left;
+      cursor: default;
+      transition: border-color 0.3s, background 0.3s;
+    }
+    .splash-music:hover {
+      border-color: rgba(120,180,255,0.28);
+      background: rgba(80,140,255,0.09);
+    }
+
+    .splash-wave-icon {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+    .wbar {
+      width: 3px;
+      border-radius: 2px 2px 0 0;
+      background: linear-gradient(to top, rgba(80,140,255,0.60), rgba(140,210,255,0.90));
+      animation: wbar-dance 1.2s ease-in-out infinite;
+    }
+    .wbar:nth-child(1) { height: 8px;  animation-duration: 0.92s; animation-delay: 0.00s; }
+    .wbar:nth-child(2) { height: 16px; animation-duration: 1.08s; animation-delay: 0.14s; }
+    .wbar:nth-child(3) { height: 24px; animation-duration: 0.80s; animation-delay: 0.28s; }
+    .wbar:nth-child(4) { height: 28px; animation-duration: 1.30s; animation-delay: 0.08s; }
+    .wbar:nth-child(5) { height: 20px; animation-duration: 0.98s; animation-delay: 0.22s; }
+    .wbar:nth-child(6) { height: 13px; animation-duration: 0.86s; animation-delay: 0.36s; }
+    .wbar:nth-child(7) { height: 7px;  animation-duration: 1.14s; animation-delay: 0.05s; }
+    @keyframes wbar-dance {
+      0%, 100% { transform: scaleY(1);    opacity: 0.65; }
+      50%       { transform: scaleY(1.75); opacity: 1.00; }
+    }
+
+    .splash-music-body { flex: 1; min-width: 0; }
+    .splash-music-title {
+      font: 600 13px/1 'Space Grotesk', sans-serif;
+      color: rgba(255,255,255,0.88);
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+    }
+    .splash-music-desc {
+      font: 300 12px/1.55 'Space Grotesk', sans-serif;
+      color: rgba(200,215,255,0.42);
+      margin-bottom: 11px;
+    }
+    .splash-genre-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .splash-genre-tags span {
+      font: 9px/1 'Courier New', monospace;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      color: rgba(120,180,255,0.60);
+      background: rgba(80,130,255,0.08);
+      border: 1px solid rgba(100,160,255,0.15);
+      border-radius: 4px;
+      padding: 3px 8px;
+    }
+
+    .splash-credit {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font: 10px/1 'Courier New', monospace;
+      letter-spacing: 0.16em;
+      color: rgba(255,255,255,0.11);
+      white-space: nowrap;
+      animation: splash-fade-up 1s cubic-bezier(0.2,0,0,1) 1.1s both;
+    }
+
+    /* ── Cinematic tour card ── */
+    #tour-card {
+      position: fixed;
+      bottom: 72px;
+      left: 50%;
+      transform: translateX(-50%) translateY(16px);
+      background: rgba(2, 4, 18, 0.84);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 16px;
+      padding: 24px 30px 20px;
+      max-width: 420px;
+      width: calc(100vw - 48px);
+      text-align: center;
+      pointer-events: none;
+      z-index: 500;
+      opacity: 0;
+      transition: opacity 0.55s cubic-bezier(0.2, 0, 0, 1),
+                  transform 0.55s cubic-bezier(0.2, 0, 0, 1);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    #tour-card.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+    .tour-eyebrow {
+      font: 9px/1 'Courier New', monospace;
+      letter-spacing: 0.24em;
+      color: rgba(120, 180, 255, 0.50);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .tour-title {
+      font: 700 20px/1.1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      letter-spacing: 0.10em;
+      color: rgba(255, 255, 255, 0.95);
+      margin-bottom: 10px;
+    }
+    .tour-body {
+      font: 13px/1.65 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: rgba(255, 255, 255, 0.42);
+      margin-bottom: 20px;
+    }
+    .tour-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .tour-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.16);
+      transition: background 0.3s, transform 0.3s;
+      flex-shrink: 0;
+    }
+    .tour-dot.active {
+      background: rgba(140, 200, 255, 0.88);
+      transform: scale(1.35);
+    }
+    .tour-progress {
+      height: 2px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 1px;
+      overflow: hidden;
+      margin-bottom: 18px;
+    }
+    #tour-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, rgba(80, 140, 255, 0.55), rgba(140, 200, 255, 0.80));
+      border-radius: 1px;
+      width: 0%;
+    }
+    .tour-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    .tour-btn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 20px;
+      color: rgba(255, 255, 255, 0.48);
+      font: 10px/1 'Courier New', monospace;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      padding: 8px 18px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+    .tour-btn:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.28);
+      color: rgba(255, 255, 255, 0.82);
+    }
+    .tour-btn.primary {
+      border-color: rgba(100, 160, 255, 0.40);
+      color: rgba(140, 200, 255, 0.82);
+    }
+    .tour-btn.primary:hover {
+      background: rgba(80, 140, 255, 0.12);
+      border-color: rgba(140, 200, 255, 0.65);
+      color: rgba(180, 225, 255, 0.96);
+    }
+
+    /* ── Music Player ── */
+    #music-player {
+      position: absolute;
+      width: 0; height: 0;
+      overflow: visible;
+      user-select: none;
+    }
+
+    #music-pill {
+      display: none; /* replaced by MUSIC header button */
+      align-items: center;
+      gap: 9px;
+      background: rgba(2, 4, 18, 0.80);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 28px;
+      padding: 9px 14px 9px 13px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      cursor: default;
+      transition: border-color 0.25s, background 0.25s;
+    }
+    #music-pill:hover { border-color: rgba(255,255,255,0.20); }
+
+    .pill-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: rgba(140, 200, 255, 0.75);
+      flex-shrink: 0;
+      animation: pill-breathe 2s ease-in-out infinite;
+      transition: background 0.4s;
+    }
+    .pill-dot.stopped { animation: none; background: rgba(255,255,255,0.20); }
+    @keyframes pill-breathe {
+      0%,100% { opacity: 0.65; transform: scale(1);   }
+      50%      { opacity: 1.00; transform: scale(1.35); }
+    }
+
+    .pill-genre {
+      font: 10px/1 'Courier New', monospace;
+      letter-spacing: 0.15em;
+      color: rgba(255,255,255,0.52);
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .pill-track {
+      font: 10px/1 'Courier New', monospace;
+      letter-spacing: 0.04em;
+      color: rgba(255,255,255,0.28);
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pill-sep { color: rgba(255,255,255,0.14); font-size: 10px; }
+
+    .pill-controls { display: flex; gap: 2px; align-items: center; }
+    .pill-btn {
+      background: none; border: none;
+      color: rgba(255,255,255,0.45);
+      font-size: 13px; line-height: 1;
+      padding: 3px 5px; cursor: pointer;
+      transition: color 0.18s;
+    }
+    .pill-btn:hover { color: rgba(255,255,255,0.88); }
+    .pill-btn.expand {
+      font: 9px/1 'Courier New', monospace;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.25);
+      padding: 3px 4px;
+    }
+
+    /* Panel */
+    #music-panel {
+      position: fixed;
+      top: 56px;
+      left: 50%;
+      width: 340px;
+      background: rgba(2, 4, 18, 0.90);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 18px;
+      padding: 20px;
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      opacity: 0;
+      transform: translateX(-50%) translateY(-8px);
+      pointer-events: none;
+      transition: opacity 0.30s cubic-bezier(0.2,0,0,1),
+                  transform 0.30s cubic-bezier(0.2,0,0,1);
+    }
+    #music-panel.open { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+
+    .mp-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .mp-label {
+      font: 9px/1 'Courier New', monospace;
+      letter-spacing: 0.24em;
+      color: rgba(140,200,255,0.48);
+      text-transform: uppercase;
+    }
+    .mp-close {
+      background: none; border: none;
+      color: rgba(255,255,255,0.28); font-size: 13px;
+      cursor: pointer; padding: 2px 4px; line-height: 1;
+      transition: color 0.18s;
+    }
+    .mp-close:hover { color: rgba(255,255,255,0.75); }
+
+    .mp-genres { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+    .mp-genre-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 14px;
+      color: rgba(255,255,255,0.38);
+      font: 9px/1 'Courier New', monospace;
+      letter-spacing: 0.11em; text-transform: uppercase;
+      padding: 5px 11px; cursor: pointer;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+    .mp-genre-btn:hover { background: rgba(255,255,255,0.10); color: rgba(255,255,255,0.75); }
+    .mp-genre-btn.active {
+      background: rgba(100,160,255,0.14);
+      border-color: rgba(120,180,255,0.40);
+      color: rgba(160,215,255,0.90);
+    }
+
+    /* Upload + URL row */
+    .mp-upload-row {
+      display: flex; gap: 7px; margin-bottom: 12px;
+    }
+    .mp-upload-btn {
+      display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.11);
+      border-radius: 10px; color: rgba(255,255,255,0.48);
+      font: 9px/1 'Courier New', monospace; letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 7px 11px; cursor: pointer;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+    }
+    .mp-upload-btn:hover { background: rgba(255,255,255,0.10); color: rgba(255,255,255,0.82); border-color: rgba(255,255,255,0.24); }
+    .mp-upload-btn.local-active { border-color: rgba(120,200,120,0.50); color: rgba(140,220,140,0.88); }
+    .mp-url-input {
+      flex: 1; min-width: 0;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 10px; color: rgba(255,255,255,0.65);
+      font: 9px/1 'Courier New', monospace; letter-spacing: 0.05em;
+      padding: 7px 10px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .mp-url-input::placeholder { color: rgba(255,255,255,0.18); }
+    .mp-url-input:focus { border-color: rgba(120,180,255,0.42); }
+
+    /* Frequency visualizer */
+    #mp-viz {
+      width: 100%; height: 42px; display: block;
+      border-radius: 7px; margin-bottom: 12px;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    #mp-viz.active { opacity: 1; }
+
+    .mp-sep { height: 1px; background: rgba(255,255,255,0.06); margin: 14px 0; }
+
+    .mp-track { min-height: 34px; margin-bottom: 12px; }
+    .mp-track-title {
+      font: 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: rgba(255,255,255,0.82);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .mp-track-ch {
+      font: 10px/1 'Courier New', monospace;
+      letter-spacing: 0.05em;
+      color: rgba(255,255,255,0.28);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .mp-progress-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .mp-progress-track {
+      flex: 1; height: 3px;
+      background: rgba(255,255,255,0.08); border-radius: 2px;
+      cursor: pointer; position: relative;
+    }
+    #mp-fill {
+      height: 100%; border-radius: 2px; width: 0%;
+      background: linear-gradient(90deg, rgba(80,140,255,0.60), rgba(160,215,255,0.85));
+      transition: width 0.6s linear;
+      pointer-events: none;
+    }
+    .mp-time {
+      font: 9px/1 'Courier New', monospace;
+      letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.22);
+      white-space: nowrap; min-width: 38px; text-align: right;
+    }
+
+    .mp-controls { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 16px; }
+    .mp-ctrl {
+      background: none; border: none;
+      color: rgba(255,255,255,0.45); font-size: 14px;
+      padding: 5px 7px; cursor: pointer; border-radius: 50%; line-height: 1;
+      transition: color 0.18s, transform 0.15s;
+    }
+    .mp-ctrl:hover { color: rgba(255,255,255,0.88); transform: scale(1.18); }
+    #mp-play-btn {
+      width: 38px; height: 38px; font-size: 15px;
+      background: rgba(120,180,255,0.12);
+      border: 1px solid rgba(120,180,255,0.30) !important;
+      border-radius: 50% !important;
+      color: rgba(160,215,255,0.88) !important;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #mp-play-btn:hover {
+      background: rgba(140,200,255,0.22) !important;
+      border-color: rgba(160,215,255,0.55) !important;
+      transform: scale(1.08) !important;
+    }
+
+    .mp-vol-row { display: flex; align-items: center; gap: 8px; }
+    .mp-vol-icon { font: 11px/1 'Courier New', monospace; color: rgba(255,255,255,0.25); flex-shrink: 0; }
+    .mp-vol {
+      flex: 1; -webkit-appearance: none; appearance: none;
+      height: 3px; background: rgba(255,255,255,0.12);
+      border-radius: 2px; outline: none; cursor: pointer;
+    }
+    .mp-vol::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 12px; height: 12px;
+      border-radius: 50%; background: rgba(200,225,255,0.80); cursor: pointer;
+    }
+    .mp-vol::-moz-range-thumb {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: rgba(200,225,255,0.80); cursor: pointer; border: none;
+    }
+
+    /* ── Wormhole flash ── */
+    #wormhole-flash {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, #ffffff 0%, #b8d8ff 60%, #2255aa 100%);
+      pointer-events: none;
+      z-index: 500;
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- Splash screen -->
+  <div id="splash">
+    <div class="splash-orb">
+      <div class="orb-core"></div>
+      <div class="orb-ring r3"></div>
+      <div class="orb-ring r2"></div>
+      <div class="orb-ring r1"></div>
+    </div>
+    <div class="splash-content">
+      <div class="splash-eyebrow">
+        <span class="splash-badge">Three.js</span>
+        <span class="splash-badge-dot"></span>
+        <span class="splash-badge">WebGL</span>
+        <span class="splash-badge-dot"></span>
+        <span class="splash-badge">GLSL</span>
+      </div>
+      <h1 class="splash-title">GALAXIA</h1>
+      <p class="splash-tagline">A procedural spiral galaxy rendered in real time</p>
+      <div class="splash-stats">
+        <div class="stat-chip">
+          <span class="stat-chip-value">159K</span>
+          <span class="stat-chip-label">Stars</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-value">5</span>
+          <span class="stat-chip-label">Arms</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-value">60fps</span>
+          <span class="stat-chip-label">Real Time</span>
+        </div>
+      </div>
+      <div class="splash-music">
+        <div class="splash-wave-icon">
+          <div class="wbar"></div>
+          <div class="wbar"></div>
+          <div class="wbar"></div>
+          <div class="wbar"></div>
+          <div class="wbar"></div>
+          <div class="wbar"></div>
+          <div class="wbar"></div>
+        </div>
+        <div class="splash-music-body">
+          <div class="splash-music-title">Music Sync</div>
+          <div class="splash-music-desc">Play any genre and watch the galaxy pulse, bloom, and rotate to the beat</div>
+          <div class="splash-genre-tags">
+            <span>Lofi</span>
+            <span>Synthwave</span>
+            <span>Jazz</span>
+            <span>Ambient</span>
+            <span>Classical</span>
+            <span>+ your own tracks</span>
+          </div>
+        </div>
+      </div>
+
+      <button id="splash-enter">
+        <span>Enter the Galaxy</span>
+        <svg viewBox="0 0 20 20"><path d="M5 10h10M11 6l4 4-4 4"/></svg>
+      </button>
+    </div>
+    <div class="splash-credit">Built by Ron Anthony &nbsp;·&nbsp; Three.js / WebGL / GLSL</div>
+  </div>
+
+  <!-- Stats HUD -->
+  <div id="hud">
+    <div class="hud-title">Galaxy Telemetry</div>
+    <div class="hud-row"><span class="hud-label">FPS</span>       <span class="hud-value accent" id="hud-fps">--</span></div>
+    <div class="hud-row"><span class="hud-label">PARTICLES</span> <span class="hud-value" id="hud-particles">159K</span></div>
+    <div class="hud-row"><span class="hud-label">ARMS</span>      <span class="hud-value" id="hud-arms">5</span></div>
+    <div class="hud-row"><span class="hud-label">DIST</span>      <span class="hud-value" id="hud-dist">--</span></div>
+    <div class="hud-row"><span class="hud-label">SIM</span>       <span class="hud-value" id="hud-time">0:00</span></div>
+  </div>
+  <div id="hint">Drag to orbit &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Click to travel &nbsp;·&nbsp; <kbd style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:0 4px;font:inherit">?</kbd> for keys</div>
+  <!-- Time scrub bar -->
+  <div id="scrub-bar"><div id="scrub-cursor"></div></div>
+  <div id="scrub-label">SHIFT + DRAG  ·  SIM 0:00</div>
+
+  <!-- Hidden YouTube player -->
+  <div id="yt-player" style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none"></div>
+
+  <!-- Music player widget -->
+  <div id="music-player">
+    <!-- Collapsed pill -->
+    <div id="music-pill">
+      <div class="pill-dot stopped" id="pill-dot"></div>
+      <span class="pill-genre" id="pill-genre">Lofi</span>
+      <span class="pill-sep">·</span>
+      <span class="pill-track" id="pill-track">Press ▶ to begin</span>
+      <div class="pill-controls">
+        <button class="pill-btn" id="pill-prev" title="Previous">⏮</button>
+        <button class="pill-btn" id="pill-play" title="Play / Pause">▶</button>
+        <button class="pill-btn" id="pill-next" title="Next">⏭</button>
+        <button class="pill-btn expand" id="mp-toggle" title="Open player (M)">▲ open</button>
+      </div>
+    </div>
+
+    <!-- Expanded panel -->
+    <div id="music-panel">
+      <div class="mp-header">
+        <span class="mp-label">♪ &nbsp;Galaxia Radio</span>
+        <button class="mp-close" id="mp-close">✕</button>
+      </div>
+
+      <div class="mp-genres" id="mp-genres"></div>
+
+      <!-- Upload / URL row -->
+      <div class="mp-upload-row">
+        <label class="mp-upload-btn" id="mp-upload-lbl" title="Upload a local audio file">
+          ↑ Upload
+          <input type="file" id="mp-file-input" accept="audio/*" style="display:none">
+        </label>
+        <input type="text" class="mp-url-input" id="mp-url-input"
+               placeholder="Paste YouTube URL + Enter" spellcheck="false" autocomplete="off">
+      </div>
+
+      <div class="mp-sep"></div>
+
+      <div class="mp-track">
+        <div class="mp-track-title" id="mp-title">Select a genre to begin</div>
+        <div class="mp-track-ch"    id="mp-channel">—</div>
+      </div>
+
+      <!-- Frequency visualizer -->
+      <canvas id="mp-viz"></canvas>
+
+      <div class="mp-progress-row">
+        <div class="mp-progress-track" id="mp-progress-track">
+          <div id="mp-fill"></div>
+        </div>
+        <span class="mp-time" id="mp-time">—</span>
+      </div>
+
+      <div class="mp-controls">
+        <button class="mp-ctrl" id="mp-prev">⏮</button>
+        <button class="mp-ctrl" id="mp-play-btn">▶</button>
+        <button class="mp-ctrl" id="mp-next">⏭</button>
+      </div>
+
+      <div class="mp-vol-row">
+        <span class="mp-vol-icon">vol</span>
+        <input type="range" class="mp-vol" id="mp-vol" min="0" max="100" value="70">
+      </div>
+    </div>
+  </div>
+
+  <!-- Cinematic tour card -->
+  <div id="tour-card">
+    <div class="tour-eyebrow" id="tour-eyebrow">STOP 1 / 6</div>
+    <div class="tour-title"   id="tour-title"></div>
+    <div class="tour-body"    id="tour-body"></div>
+    <div class="tour-dots"    id="tour-dots"></div>
+    <div class="tour-progress"><div id="tour-progress-bar"></div></div>
+    <div class="tour-controls">
+      <button class="tour-btn"         id="tour-exit">Exit Tour</button>
+      <button class="tour-btn primary" id="tour-next">Next →</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <div id="paused-badge">⏸ PAUSED</div>
+
+  <!-- Fullscreen toggle -->
+  <button id="btn-fullscreen" title="Fullscreen (F)">
+    <!-- expand icon (default) -->
+    <svg id="icon-expand" viewBox="0 0 16 16">
+      <polyline points="1,5 1,1 5,1"/><polyline points="11,1 15,1 15,5"/>
+      <polyline points="15,11 15,15 11,15"/><polyline points="5,15 1,15 1,11"/>
+    </svg>
+    <!-- compress icon (fullscreen active) -->
+    <svg id="icon-compress" viewBox="0 0 16 16" style="display:none">
+      <polyline points="5,1 5,5 1,5"/><polyline points="11,5 15,5 15,1"/>
+      <polyline points="15,11 11,11 11,15"/><polyline points="1,11 5,11 5,15"/>
+    </svg>
+  </button>
+
+  <!-- Help panel -->
+  <div id="help">
+    <div class="help-title">Keyboard Shortcuts</div>
+    <div class="row"><span><kbd>Click</kbd></span><span>Travel there</span></div>
+    <div class="row"><span><kbd>Click core</kbd></span><span>Black hole dive</span></div>
+    <div class="row"><span><kbd>Shift</kbd>+drag</span><span>Scrub time</span></div>
+    <div class="row"><span><kbd>Space</kbd></span><span>Pause / Resume</span></div>
+    <div class="row"><span><kbd>R</kbd></span><span>Reset camera</span></div>
+    <div class="row"><span><kbd>P</kbd></span><span>Pulse</span></div>
+    <div class="row"><span><kbd>+</kbd> / <kbd>-</kbd></span><span>Spiral arms (2–12)</span></div>
+    <div class="row"><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span><span>Camera presets</span></div>
+    <div class="row"><span><kbd>F</kbd></span><span>Fullscreen</span></div>
+    <div class="row"><span><kbd>S</kbd></span><span>Screenshot</span></div>
+    <div class="row"><span><kbd>I</kbd></span><span>Toggle star tooltip</span></div>
+    <div class="row"><span><kbd>W</kbd> hold</span><span>Warp speed</span></div>
+    <div class="row"><span><kbd>T</kbd></span><span>Cycle theme</span></div>
+    <div class="row"><span><kbd>M</kbd></span><span>Music player</span></div>
+    <div class="row"><span><kbd>G</kbd></span><span>Guided tour</span></div>
+    <div class="row"><span><kbd>?</kbd></span><span>Toggle this panel</span></div>
+  </div>
+
+  <div id="help-hint">Press <kbd style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);border-radius:3px;padding:0 4px;font:inherit">?</kbd> for shortcuts</div>
+
+  <!-- Theme picker -->
+  <div id="theme-picker">
+    <button class="theme-btn active" data-theme="milkyway"    style="background:#f5ddb0" title="Milky Way"></button>
+    <button class="theme-btn"        data-theme="neon"        style="background:#00ddaa" title="Andromeda Neon"></button>
+    <button class="theme-btn"        data-theme="synthwave"   style="background:#cc22ee" title="Synthwave"></button>
+    <button class="theme-btn"        data-theme="mono"        style="background:#8899cc" title="Monochrome"></button>
+    <button class="theme-btn"        data-theme="solar"       style="background:#ff7722" title="Solar Flare"></button>
+    <button class="theme-btn"        data-theme="arctic"      style="background:#88ccff" title="Arctic"></button>
+    <button class="theme-btn"        data-theme="golden"      style="background:#ffcc00" title="Golden Hour"></button>
+    <button class="theme-btn"        data-theme="infrared"    style="background:#ff2222" title="Infrared"></button>
+    <button class="theme-btn"        data-theme="ultraviolet" style="background:#6622ff" title="Ultraviolet"></button>
+    <button class="theme-btn"        data-theme="copper"      style="background:#dd8844" title="Copper"></button>
+  </div>
+
+  <!-- Custom cursor -->
+  <div id="cursor-dot"></div>
+  <div id="cursor-ring"></div>
+
+  <!-- Screenshot capture flash -->
+  <div id="capture-flash"></div>
+
+  <!-- Screenshot button -->
+  <button id="btn-screenshot" title="Screenshot (S)">
+    <svg viewBox="0 0 20 20">
+      <rect x="1" y="4" width="18" height="14" rx="2"/>
+      <circle cx="10" cy="11" r="3.2"/>
+      <path d="M7 4l1.5-2h3L13 4"/>
+    </svg>
+  </button>
+
+  <!-- Wormhole flash overlay -->
+  <div id="wormhole-flash"></div>
+
+  <!-- Star info tooltip -->
+  <div id="star-tip">
+    <div id="star-tip-cls">—</div>
+    <div class="tip-row"><span class="tip-lbl">CLASS</span><span class="tip-val" id="tip-class">—</span></div>
+    <div class="tip-row"><span class="tip-lbl">TEMP</span> <span class="tip-val" id="tip-temp">—</span></div>
+    <div class="tip-row"><span class="tip-lbl">DIST</span> <span class="tip-val" id="tip-dist">—</span></div>
+  </div>
+
+  <!-- Camera preset buttons -->
+  <div id="camera-presets">
+    <button class="cam-btn" id="preset-top"  title="Top Down (1)">↑ Top Down</button>
+    <button class="cam-btn" id="preset-eq"   title="Equatorial (2)">→ Equatorial</button>
+    <button class="cam-btn" id="preset-dive" title="Dive In (3)">↓ Dive In</button>
+    <button class="cam-btn" id="btn-tour"    title="Guided Tour (G)">◉ Tour</button>
+    <button class="cam-btn" id="btn-music"  title="Music Player (M)">♪ Music</button>
+  </div>
+
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- OrbitControls for r128 -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- Post-processing stack -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+  <script>
+  'use strict';
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Renderer
+  // ─────────────────────────────────────────────────────────────────────────────
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000005, 1);
+  document.body.appendChild(renderer.domElement);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Scene & Camera
+  // ─────────────────────────────────────────────────────────────────────────────
+  const scene  = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 6000);
+  camera.position.set(0, 220, 2);   // cinematic top-down start for formation reveal
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Orbit Controls
+  // ─────────────────────────────────────────────────────────────────────────────
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping   = true;
+  controls.dampingFactor   = 0.04;
+  controls.minDistance     = 15;
+  controls.maxDistance     = 500;
+  controls.autoRotate      = true;
+  controls.autoRotateSpeed = 0.25;
+  controls.saveState();   // snapshot for R-key reset
+
+  // Pause auto-rotate on user interaction; resume after 3 s of idle
+  let idleTimer = null;
+  function onInteract() {
+    controls.autoRotate = false;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { controls.autoRotate = true; }, 3000);
+  }
+  renderer.domElement.addEventListener('pointerdown', onInteract);
+  renderer.domElement.addEventListener('wheel', onInteract, { passive: true });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Effect Composer — Bloom → Grain/Vignette
+  // ─────────────────────────────────────────────────────────────────────────────
+  const GrainVignetteShader = {
+    uniforms: {
+      tDiffuse: { value: null },
+      uTime:    { value: 0.0 },
+      uGrain:   { value: 0.032 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+    `,
+    fragmentShader: `
+      uniform sampler2D tDiffuse;
+      uniform float     uTime;
+      uniform float     uGrain;
+      varying vec2      vUv;
+      float rand(vec2 c) { return fract(sin(dot(c, vec2(12.9898,78.233))) * 43758.5453); }
+      void main() {
+        vec4 c = texture2D(tDiffuse, vUv);
+        float grain = (rand(vUv + fract(uTime * 0.07)) - 0.5) * uGrain;
+        c.rgb = clamp(c.rgb + grain, 0.0, 1.0);
+        float vig = smoothstep(1.0, 0.22, length(vUv - 0.5) * 1.88);
+        c.rgb *= mix(0.68, 1.0, vig);
+        gl_FragColor = c;
+      }
+    `,
+  };
+
+  const composer = new THREE.EffectComposer(renderer);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+
+  const bloomPass = new THREE.UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.13,   // strength — subtle, only core + giant stars
+    0.40,   // radius
+    0.50    // threshold — high so most stars don't bloom
+  );
+  composer.addPass(bloomPass);
+
+  const grainVigPass = new THREE.ShaderPass(GrainVignetteShader);
+  grainVigPass.renderToScreen = true;
+  composer.addPass(grainVigPass);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Shared Uniforms  (stars + nebula shaders)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const sharedUniforms = {
+    uTime:      { value: 0.0 },
+    uPulse:     { value: 0.0 },
+    uPulseAmp:  { value: 1.0 },   // beat-specific amplitude scalar (0.4 – 2.2)
+    uTint:      { value: new THREE.Vector3(1.00, 0.95, 0.90) },
+    uSat:       { value: 1.0 },
+    uFormation: { value: 0.0 },   // 0 = invisible, 1.15+ = fully formed
+  };
+
+  // Warp uniforms — share tint/sat refs so themes apply to streaks too
+  const warpUniforms = {
+    uTime:    sharedUniforms.uTime,
+    uTint:    sharedUniforms.uTint,
+    uSat:     sharedUniforms.uSat,
+    uWarpLen: { value: 0.0 },
+  };
+
+  let warpLinesRef  = null;   // current LineSegments; replaced on galaxy rebuild
+  let starPointsRef = null;   // current star Points; used for hover raycasting
+  let warpActive    = false;
+  let warpTarget    = 0.0;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GLSL — Galaxy vertex shader
+  // ─────────────────────────────────────────────────────────────────────────────
+  const galaxyVertSrc = /* glsl */`
+    uniform float uTime;
+    uniform float uPulse;
+    uniform float uPulseAmp;
+    uniform float uFormation;
+
+    attribute float aSize;
+    attribute vec3  aColor;
+    attribute float aRadius;
+
+    varying vec3  vColor;
+    varying float vFormAlpha;
+
+    void main() {
+      vColor = aColor;
+
+      // Formation wave — stars appear center-outward as uFormation sweeps 0→1.15
+      float normR  = aRadius / 160.0;
+      vFormAlpha   = smoothstep(normR, normR + 0.12, uFormation);
+
+      // Differential orbital speed: inner rings orbit faster
+      float speed = 0.10 / (aRadius * 0.045 + 0.90);
+      float theta = uTime * speed;
+      float cosT  = cos(theta);
+      float sinT  = sin(theta);
+
+      vec3 p = position;
+      vec3 rotated = vec3(
+        p.x * cosT - p.z * sinT,
+        p.y,
+        p.x * sinT + p.z * cosT
+      );
+
+      vec4 mv = modelViewMatrix * vec4(rotated, 1.0);
+      gl_Position = projectionMatrix * mv;
+
+      // Pulse ripple expanding outward — amplitude driven per-beat by uPulseAmp
+      float ripple   = sin(uPulse * 3.14159 - aRadius * 0.07);
+      float pulseMod = 1.0 + max(0.0, ripple) * uPulse * uPulseAmp;
+
+      gl_PointSize = clamp(aSize * (280.0 / -mv.z) * pulseMod, 0.5, 14.0);
+    }
+  `;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GLSL — Shared fragment shader (soft circular glow)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const glowFragSrc = /* glsl */`
+    uniform vec3  uTint;
+    uniform float uSat;
+    varying vec3  vColor;
+    varying float vFormAlpha;
+
+    void main() {
+      vec2  uv = gl_PointCoord - 0.5;
+      float d  = length(uv) * 2.0;
+      if (d > 1.0) discard;
+
+      float alpha = pow(1.0 - smoothstep(0.0, 1.0, d), 1.5);
+
+      // Saturation shift then tint multiply
+      float lum = dot(vColor, vec3(0.299, 0.587, 0.114));
+      vec3  col = mix(vec3(lum), vColor, uSat) * uTint;
+
+      gl_FragColor = vec4(col, alpha * vFormAlpha);
+    }
+  `;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GLSL — Background star vertex (no orbit, no pulse)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const bgVertSrc = /* glsl */`
+    attribute float aSize;
+    attribute vec3  aColor;
+    varying   vec3  vColor;
+    varying   float vFormAlpha;
+
+    void main() {
+      vColor     = aColor;
+      vFormAlpha = 1.0;   // background stars always fully visible
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position  = projectionMatrix * mv;
+      gl_PointSize = clamp(aSize * (2200.0 / -mv.z), 0.4, 3.5);
+    }
+  `;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GLSL — Warp streak vertex shader
+  //   Each star has 2 vertices (aIsEnd=0 start, aIsEnd=1 tip).
+  //   The tip vertex is displaced along the orbital tangent by uWarpLen.
+  //   vAlpha is interpolated 0.9→0.0 along the segment for a fade-out streak.
+  // ─────────────────────────────────────────────────────────────────────────────
+  const warpVertSrc = /* glsl */`
+    uniform float uTime;
+    uniform float uWarpLen;
+
+    attribute vec3  aColor;
+    attribute float aRadius;
+    attribute float aIsEnd;    // 0 = star position, 1 = streak tip
+
+    varying vec3  vColor;
+    varying float vAlpha;
+
+    void main() {
+      vColor = aColor;
+
+      float speed = 0.10 / (aRadius * 0.045 + 0.90);
+      float theta = uTime * speed;
+      float cosT  = cos(theta);
+      float sinT  = sin(theta);
+
+      vec3 p = position;
+
+      // Same orbital rotation as the star shader
+      vec3 rotated = vec3(
+        p.x * cosT - p.z * sinT,
+        p.y,
+        p.x * sinT + p.z * cosT
+      );
+
+      if (aIsEnd > 0.5) {
+        // Orbital tangential direction = d(rotated)/d(theta)
+        vec3 tangent = normalize(vec3(
+          -p.x * sinT - p.z * cosT,
+           0.0,
+           p.x * cosT - p.z * sinT
+        ));
+        float streakLen = uWarpLen * (aRadius * 0.28 + 3.5);
+        rotated += tangent * streakLen;
+        vAlpha = 0.0;
+      } else {
+        vAlpha = 0.88;
+      }
+
+      vec4 mv = modelViewMatrix * vec4(rotated, 1.0);
+      gl_Position = projectionMatrix * mv;
+    }
+  `;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GLSL — Warp streak fragment shader
+  // ─────────────────────────────────────────────────────────────────────────────
+  const warpFragSrc = /* glsl */`
+    uniform vec3  uTint;
+    uniform float uSat;
+
+    varying vec3  vColor;
+    varying float vAlpha;
+
+    void main() {
+      float lum = dot(vColor, vec3(0.299, 0.587, 0.114));
+      vec3  col = mix(vec3(lum), vColor, uSat) * uTint * 1.3;
+      gl_FragColor = vec4(col, vAlpha);
+    }
+  `;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GLSL — Shooting star / comet vertex shader
+  // ─────────────────────────────────────────────────────────────────────────────
+  const cometVertSrc = /* glsl */`
+    attribute float aSize;
+    attribute float aAlpha;
+    uniform   float uLifeAlpha;
+    varying   float vAlpha;
+
+    void main() {
+      vAlpha = aAlpha * uLifeAlpha;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position  = projectionMatrix * mv;
+      gl_PointSize = clamp(aSize * (2200.0 / -mv.z), 0.4, 10.0);
+    }
+  `;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GLSL — Shooting star / comet fragment shader
+  // ─────────────────────────────────────────────────────────────────────────────
+  const cometFragSrc = /* glsl */`
+    uniform vec3  uTint;
+    varying float vAlpha;
+
+    void main() {
+      vec2  uv = gl_PointCoord - 0.5;
+      float d  = length(uv) * 2.0;
+      if (d > 1.0) discard;
+      float a = pow(1.0 - smoothstep(0.0, 1.0, d), 1.5) * vAlpha;
+      gl_FragColor = vec4(uTint * 1.4, a);
+    }
+  `;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GLSL — Lightspeed tunnel overlay (screen-space, rendered in separate scene)
+  // Two layers of radial streaks + rushing rings + central portal glow
+  // ─────────────────────────────────────────────────────────────────────────────
+  const tunnelVertSrc = /* glsl */`
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position.xy, 0.0, 1.0);
+    }
+  `;
+
+  const tunnelFragSrc = /* glsl */`
+    precision highp float;
+
+    uniform float uProgress;
+    uniform float uTime;
+    uniform float uAspect;
+
+    varying vec2 vUv;
+
+    float h2(vec2 p) {
+      p = fract(p * vec2(127.1, 311.7));
+      p += dot(p, p + 19.19);
+      return fract(p.x * p.y);
+    }
+
+    // One sector-based radial streak layer.
+    // n     = number of angular sectors
+    // seed  = per-layer randomisation offset
+    // thick = how much of each sector the streak occupies (0-1)
+    float streakLayer(float angle, float radius, float n, float seed, float thick) {
+      float step = 6.28318 / n;
+      float id   = floor(angle / step);
+      float fr   = mod(angle, step) / step;   // 0-1 inside sector
+
+      float h1 = h2(vec2(id, seed));
+      float h2v = h2(vec2(id, seed + 1.0));
+      float h3 = h2(vec2(id, seed + 2.0));
+
+      float w  = thick * (0.6 + h1 * 0.4);          // actual width fraction
+      float ir = 0.02 + h2v * 0.14;                  // inner start radius
+      float br = 0.45 + h3 * 0.55;                   // brightness
+
+      float aFade = smoothstep(0.0, w, fr) * smoothstep(0.0, w, 1.0 - fr);
+      float rFade = smoothstep(ir, ir + 0.06, radius) * smoothstep(1.45, 0.72, radius);
+
+      // Subtle shimmer per streak
+      float sh = 0.78 + 0.22 * sin(uTime * 5.5 + id * 2.1 + seed * 4.3);
+
+      return aFade * rFade * br * sh;
+    }
+
+    void main() {
+      if (uProgress < 0.001) { gl_FragColor = vec4(0.0); return; }
+
+      vec2  uv     = vUv * 2.0 - 1.0;
+      uv.x *= uAspect;
+
+      // Subtle barrel-warp at edges — space curvature feel
+      float r2 = dot(uv, uv);
+      uv *= 1.0 + r2 * 0.06 * uProgress;
+
+      float radius = length(uv);
+      float angle  = mod(atan(uv.y, uv.x) + 6.28318, 6.28318);
+
+      // Two streak layers: 48 thick bright + 110 thin fine
+      float s  = streakLayer(angle, radius, 48.0,  0.0, 0.14);
+      s += streakLayer(angle, radius, 110.0, 7.0, 0.06) * 0.55;
+      s  = min(s, 1.0);
+
+      // Tunnel rings rushing toward viewer
+      float rings = 0.0;
+      for (int i = 0; i < 10; i++) {
+        float fi   = float(i);
+        float ph   = fract(uTime * 0.65 + fi * 0.1);
+        float rr   = 0.06 + ph * 1.5;
+        float rw   = 0.008 + ph * 0.007;
+        float fade = pow(1.0 - ph, 1.8);
+        rings += (1.0 - smoothstep(0.0, rw, abs(radius - rr))) * fade * 0.26;
+      }
+
+      // Central portal glow (destination ahead)
+      float core = exp(-radius * 3.6) * 1.7;
+      float halo = exp(-abs(radius - 0.11) * 22.0) * 0.60;
+
+      // Doppler colour: blue-white center → pure white mid → warm yellow edge
+      float cr  = clamp(radius * 2.1, 0.0, 1.0);
+      vec3  col = mix(
+        vec3(0.48, 0.72, 1.00),
+        mix(vec3(1.0), vec3(1.00, 0.88, 0.52), max(0.0, radius - 0.42) * 2.4),
+        cr
+      );
+
+      float bright = s * 1.15 + rings + core * 0.42 + halo;
+      gl_FragColor  = vec4(col * bright, clamp(bright * uProgress, 0.0, 0.96));
+    }
+  `;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Utility helpers
+  // ─────────────────────────────────────────────────────────────────────────────
+  function gauss() {
+    let u, v;
+    do { u = Math.random(); } while (u === 0);
+    do { v = Math.random(); } while (v === 0);
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function rng(min, max) { return min + Math.random() * (max - min); }
+
+  function makeMaterial() {
+    return new THREE.ShaderMaterial({
+      uniforms:       sharedUniforms,
+      vertexShader:   galaxyVertSrc,
+      fragmentShader: glowFragSrc,
+      transparent:    true,
+      depthWrite:     false,
+      blending:       THREE.AdditiveBlending,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Galaxy state — mutable so arm count changes can rebuild
+  // ─────────────────────────────────────────────────────────────────────────────
+  let arms       = 5;
+  const MAX_R    = 80;
+  const ARM_TWIST = 2.3;
+
+  let galaxyGroup = null;   // holds stars + nebula Points; replaced on rebuild
+
+  function buildStars(armCount) {
+    const N        = 120_000;
+    const armStep  = (Math.PI * 2) / armCount;
+    const pos      = new Float32Array(N * 3);
+    const col      = new Float32Array(N * 3);
+    const sz       = new Float32Array(N);
+    const rad      = new Float32Array(N);
+
+    for (let i = 0; i < N; i++) {
+      const arm     = Math.floor(Math.random() * armCount);
+      const baseAng = arm * armStep;
+      const r            = Math.pow(Math.random(), 1.55) * MAX_R + 0.4;
+      const dynamicTwist = ARM_TWIST * Math.sqrt(armCount / 5);
+      const spin         = (r / MAX_R) * dynamicTwist;
+      const armAng  = baseAng + spin + gauss() * 0.13;
+      const scatter = Math.abs(gauss()) * (r * 0.09 + 0.6);
+      const sAng    = Math.random() * Math.PI * 2;
+
+      const x = Math.cos(armAng) * r + Math.cos(sAng) * scatter;
+      const z = Math.sin(armAng) * r + Math.sin(sAng) * scatter;
+      const y = gauss() * (0.35 + r * 0.014);
+
+      pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
+      rad[i] = Math.sqrt(x*x + z*z);
+
+      const roll = Math.random();
+      let cr, cg, cb;
+      if (roll < 0.12) {
+        cr = 0.75 + Math.random() * 0.25; cg = 0.85 + Math.random() * 0.15; cb = 1.0;
+      } else if (roll < 0.45) {
+        cr = 1.0; cg = 0.88 + Math.random() * 0.10; cb = 0.55 + Math.random() * 0.20;
+      } else {
+        const t = r / MAX_R;
+        cr = 1.0;
+        cg = 0.62 + (1 - t) * 0.20 + Math.random() * 0.10;
+        cb = 0.30 + (1 - t) * 0.20 + Math.random() * 0.10;
+      }
+
+      col[i*3]=Math.min(cr,1); col[i*3+1]=Math.min(cg,1); col[i*3+2]=Math.min(cb,1);
+      sz[i] = Math.random() < 0.015 ? rng(2.5, 6.0) : rng(0.4, 2.0);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('aColor',   new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('aSize',    new THREE.BufferAttribute(sz,  1));
+    geo.setAttribute('aRadius',  new THREE.BufferAttribute(rad, 1));
+    const points = new THREE.Points(geo, makeMaterial());
+
+    // Warp streak geometry — 2 vertices per star (start + tip)
+    const wPos   = new Float32Array(N * 6);
+    const wCol   = new Float32Array(N * 6);
+    const wRad   = new Float32Array(N * 2);
+    const wIsEnd = new Float32Array(N * 2);
+
+    for (let i = 0; i < N; i++) {
+      wPos[i*6]   = pos[i*3];   wPos[i*6+1] = pos[i*3+1]; wPos[i*6+2] = pos[i*3+2];
+      wPos[i*6+3] = pos[i*3];   wPos[i*6+4] = pos[i*3+1]; wPos[i*6+5] = pos[i*3+2];
+      wCol[i*6]   = col[i*3];   wCol[i*6+1] = col[i*3+1]; wCol[i*6+2] = col[i*3+2];
+      wCol[i*6+3] = col[i*3];   wCol[i*6+4] = col[i*3+1]; wCol[i*6+5] = col[i*3+2];
+      wRad[i*2]   = rad[i];     wRad[i*2+1] = rad[i];
+      wIsEnd[i*2] = 0.0;        wIsEnd[i*2+1] = 1.0;
+    }
+
+    const wGeo = new THREE.BufferGeometry();
+    wGeo.setAttribute('position', new THREE.BufferAttribute(wPos,   3));
+    wGeo.setAttribute('aColor',   new THREE.BufferAttribute(wCol,   3));
+    wGeo.setAttribute('aRadius',  new THREE.BufferAttribute(wRad,   1));
+    wGeo.setAttribute('aIsEnd',   new THREE.BufferAttribute(wIsEnd, 1));
+
+    const warpLines = new THREE.LineSegments(wGeo, new THREE.ShaderMaterial({
+      uniforms:       warpUniforms,
+      vertexShader:   warpVertSrc,
+      fragmentShader: warpFragSrc,
+      transparent:    true,
+      depthWrite:     false,
+      blending:       THREE.AdditiveBlending,
+    }));
+    warpLines.visible = false;
+
+    return { points, warpLines };
+  }
+
+  function buildNebula(armCount, count, baseColor, radiusBand, heightSigma, sizeRange) {
+    const armStep = (Math.PI * 2) / armCount;
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    const sz  = new Float32Array(count);
+    const rad = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      const arm   = Math.floor(Math.random() * armCount);
+      const r            = rng(radiusBand[0], radiusBand[1]);
+      const dynamicTwist = ARM_TWIST * Math.sqrt(armCount / 5);
+      const spin         = (r / MAX_R) * dynamicTwist * 0.65;
+      const angle = arm * armStep + spin + gauss() * 0.28;
+      const spr   = Math.abs(gauss()) * r * 0.20;
+      const sAng  = Math.random() * Math.PI * 2;
+
+      const x = Math.cos(angle) * r + Math.cos(sAng) * spr;
+      const z = Math.sin(angle) * r + Math.sin(sAng) * spr;
+      const y = gauss() * heightSigma;
+
+      pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
+      rad[i] = r;
+
+      col[i*3]   = Math.min(baseColor[0] + Math.random() * 0.25, 1);
+      col[i*3+1] = Math.min(baseColor[1] + Math.random() * 0.20, 1);
+      col[i*3+2] = Math.min(baseColor[2] + Math.random() * 0.20, 1);
+      sz[i] = rng(sizeRange[0], sizeRange[1]);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('aColor',   new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('aSize',    new THREE.BufferAttribute(sz,  1));
+    geo.setAttribute('aRadius',  new THREE.BufferAttribute(rad, 1));
+    return new THREE.Points(geo, makeMaterial());
+  }
+
+  function rebuildGalaxy() {
+    // Dispose old group
+    if (galaxyGroup) {
+      galaxyGroup.children.forEach(child => {
+        child.geometry.dispose();
+        child.material.dispose();
+      });
+      scene.remove(galaxyGroup);
+    }
+
+    const { points, warpLines } = buildStars(arms);
+    warpLinesRef  = warpLines;
+    starPointsRef = points;
+
+    galaxyGroup = new THREE.Group();
+    galaxyGroup.add(points);
+    galaxyGroup.add(buildNebula(arms, 13000, [0.42, 0.08, 0.85], [4,  42], 2.2, [1.0, 5.5]));
+    galaxyGroup.add(buildNebula(arms, 10000, [0.90, 0.38, 0.10], [18, 62], 3.0, [1.2, 6.5]));
+    galaxyGroup.add(buildNebula(arms,  8000, [0.10, 0.32, 0.92], [34, 76], 4.0, [2.0, 9.0]));
+    galaxyGroup.add(warpLines);
+    scene.add(galaxyGroup);
+  }
+
+  rebuildGalaxy();  // initial build
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Background Stars — fixed sphere, no orbit
+  // ─────────────────────────────────────────────────────────────────────────────
+  (function buildBackground() {
+    const N   = 8_000;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    const sz  = new Float32Array(N);
+
+    for (let i = 0; i < N; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi   = Math.acos(2 * Math.random() - 1);
+      const r     = rng(900, 2200);
+
+      pos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+      pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+      pos[i*3+2] = r * Math.cos(phi);
+
+      const c = 0.65 + Math.random() * 0.35;
+      col[i*3]   = c;
+      col[i*3+1] = c - Math.random() * 0.08;
+      col[i*3+2] = Math.min(c + Math.random() * 0.10, 1);
+      sz[i] = rng(0.3, 1.6);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('aColor',   new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('aSize',    new THREE.BufferAttribute(sz,  1));
+
+    scene.add(new THREE.Points(geo, new THREE.ShaderMaterial({
+      uniforms:       { uTint: sharedUniforms.uTint, uSat: sharedUniforms.uSat },
+      vertexShader:   bgVertSrc,
+      fragmentShader: glowFragSrc,
+      transparent:    true,
+      depthWrite:     false,
+      blending:       THREE.AdditiveBlending,
+    })));
+  }());
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Galactic Core — layered additive spheres faking bloom
+  // ─────────────────────────────────────────────────────────────────────────────
+  [
+    { r: 0.4,  color: 0xffffff, opacity: 0.95 },
+    { r: 1.2,  color: 0xfff4e8, opacity: 0.55 },
+    { r: 2.8,  color: 0xffe0bb, opacity: 0.28 },
+    { r: 6.0,  color: 0xffbb88, opacity: 0.13 },
+    { r: 13.0, color: 0xff8855, opacity: 0.06 },
+    { r: 24.0, color: 0xff6633, opacity: 0.025 },
+  ].forEach(({ r, color, opacity }) => {
+    scene.add(new THREE.Mesh(
+      new THREE.SphereGeometry(r, 24, 24),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending })
+    ));
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Lightspeed tunnel — screen-space overlay (separate orthographic scene)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const tunnelScene = new THREE.Scene();
+  const tunnelCam   = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const tunnelUniforms = {
+    uProgress: { value: 0.0 },
+    uTime:     { value: 0.0 },
+    uAspect:   { value: window.innerWidth / window.innerHeight },
+  };
+  tunnelScene.add(new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    new THREE.ShaderMaterial({
+      uniforms:       tunnelUniforms,
+      vertexShader:   tunnelVertSrc,
+      fragmentShader: tunnelFragSrc,
+      transparent:    true,
+      depthWrite:     false,
+      depthTest:      false,
+      blending:       THREE.AdditiveBlending,
+    })
+  ));
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Shooting stars — comet pool
+  // ─────────────────────────────────────────────────────────────────────────────
+  const COMET_TRAIL = 24;
+  const COMET_COUNT = 5;
+  const cometPool   = [];
+  let   wallTime    = 0;
+  let   nextComet   = 3.5;   // wall-seconds until first spawn
+
+  (function buildCometPool() {
+    for (let c = 0; c < COMET_COUNT; c++) {
+      const pos    = new Float32Array(COMET_TRAIL * 3);
+      const sizes  = new Float32Array(COMET_TRAIL);
+      const alphas = new Float32Array(COMET_TRAIL);
+
+      for (let i = 0; i < COMET_TRAIL; i++) {
+        const t   = i / (COMET_TRAIL - 1);   // 0 = head, 1 = tail
+        sizes[i]  = 2.8 * (1.0 - t * 0.88) + 0.35;
+        alphas[i] = Math.pow(1.0 - t, 1.4);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos,    3).setUsage(THREE.DynamicDrawUsage));
+      geo.setAttribute('aSize',    new THREE.BufferAttribute(sizes,  1));
+      geo.setAttribute('aAlpha',   new THREE.BufferAttribute(alphas, 1));
+
+      const mat = new THREE.ShaderMaterial({
+        uniforms:       { uTint: sharedUniforms.uTint, uLifeAlpha: { value: 0.0 } },
+        vertexShader:   cometVertSrc,
+        fragmentShader: cometFragSrc,
+        transparent:    true,
+        depthWrite:     false,
+        blending:       THREE.AdditiveBlending,
+      });
+
+      const mesh = new THREE.Points(geo, mat);
+      mesh.visible = false;
+      scene.add(mesh);
+
+      cometPool.push({
+        mesh, mat,
+        posAttr:  geo.attributes.position,
+        active:   false,
+        elapsed:  0, life: 0,
+        startPos: new THREE.Vector3(),
+        dir:      new THREE.Vector3(),
+        speed: 0, trailLen: 0,
+      });
+    }
+  }());
+
+  const _cometUp  = new THREE.Vector3(0, 1, 0);
+  const _cometTmp = new THREE.Vector3();
+
+  function spawnComet() {
+    const slot = cometPool.find(c => !c.active);
+    if (!slot) return;
+
+    // Random point on sky sphere
+    const R     = 1700;
+    const theta = Math.random() * Math.PI * 2;
+    const phi   = Math.acos(2 * Math.random() - 1);
+    slot.startPos.set(
+      R * Math.sin(phi) * Math.cos(theta),
+      R * Math.sin(phi) * Math.sin(theta),
+      R * Math.cos(phi)
+    );
+
+    // Random tangential direction (slides across sky, not toward/away camera)
+    _cometTmp.copy(slot.startPos).normalize();
+    const tang = new THREE.Vector3().crossVectors(_cometTmp, _cometUp).normalize();
+    if (tang.lengthSq() < 0.01) tang.set(1, 0, 0);
+    tang.applyAxisAngle(_cometTmp, Math.random() * Math.PI * 2).normalize();
+
+    const trailLen = 90  + Math.random() * 130;
+    const life     = 1.6 + Math.random() * 2.2;
+    const dist     = trailLen * 2 + Math.random() * 150;
+
+    // Offset start so comet passes through the spawn sphere point
+    slot.startPos.sub(_cometTmp.copy(tang).multiplyScalar(dist * 0.45));
+
+    slot.dir.copy(tang);
+    slot.speed    = dist / life;
+    slot.trailLen = trailLen;
+    slot.life     = life;
+    slot.elapsed  = 0;
+    slot.active   = true;
+    slot.mesh.visible = true;
+  }
+
+  function updateComets(delta) {
+    wallTime += delta;
+    if (wallTime >= nextComet) {
+      spawnComet();
+      nextComet = wallTime + 3 + Math.random() * 6;
+    }
+
+    for (const c of cometPool) {
+      if (!c.active) continue;
+
+      c.elapsed += delta;
+      if (c.elapsed >= c.life) {
+        c.active = false;
+        c.mesh.visible = false;
+        continue;
+      }
+
+      // Fade in first 0.25 s, fade out last 0.35 s
+      const lifeAlpha =
+        Math.min(c.elapsed / 0.25, 1.0) *
+        Math.min((c.life - c.elapsed) / 0.35, 1.0);
+      c.mat.uniforms.uLifeAlpha.value = lifeAlpha;
+
+      // Head position at current elapsed
+      const hx = c.startPos.x + c.dir.x * c.elapsed * c.speed;
+      const hy = c.startPos.y + c.dir.y * c.elapsed * c.speed;
+      const hz = c.startPos.z + c.dir.z * c.elapsed * c.speed;
+
+      const pa = c.posAttr;
+      for (let i = 0; i < COMET_TRAIL; i++) {
+        const t = i / (COMET_TRAIL - 1);
+        pa.setXYZ(i,
+          hx - c.dir.x * t * c.trailLen,
+          hy - c.dir.y * t * c.trailLen,
+          hz - c.dir.z * t * c.trailLen
+        );
+      }
+      pa.needsUpdate = true;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Pulse state
+  // ─────────────────────────────────────────────────────────────────────────────
+  let pulseStart  = -999;
+  let   PULSE_DUR = 1.8;   // mutable — varies per beat energy
+
+  function triggerPulse() { pulseStart = simTime; }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Pause / sim-time — decouple sim clock from wall clock
+  // ─────────────────────────────────────────────────────────────────────────────
+  let paused   = false;
+  let simTime  = 0;
+  let lastTick = performance.now();
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Toast helper
+  // ─────────────────────────────────────────────────────────────────────────────
+  const toastEl = document.getElementById('toast');
+  let toastTimer = null;
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1800);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Help panel toggle
+  // ─────────────────────────────────────────────────────────────────────────────
+  const helpEl     = document.getElementById('help');
+  const helpHintEl = document.getElementById('help-hint');
+  let helpVisible  = false;
+
+  function toggleHelp() {
+    helpVisible = !helpVisible;
+    helpEl.classList.toggle('show', helpVisible);
+    helpHintEl.classList.toggle('hidden', helpVisible);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Theme switcher
+  // ─────────────────────────────────────────────────────────────────────────────
+  const THEMES = {
+    milkyway:    { tint: new THREE.Vector3(1.00, 0.95, 0.90), sat: 1.00, label: 'MILKY WAY' },
+    neon:        { tint: new THREE.Vector3(0.28, 1.00, 0.82), sat: 1.65, label: 'ANDROMEDA NEON' },
+    synthwave:   { tint: new THREE.Vector3(0.92, 0.18, 1.00), sat: 1.45, label: 'SYNTHWAVE' },
+    mono:        { tint: new THREE.Vector3(0.80, 0.90, 1.00), sat: 0.00, label: 'MONOCHROME' },
+    solar:       { tint: new THREE.Vector3(1.00, 0.50, 0.08), sat: 1.65, label: 'SOLAR FLARE' },
+    arctic:      { tint: new THREE.Vector3(0.42, 0.78, 1.00), sat: 0.75, label: 'ARCTIC' },
+    golden:      { tint: new THREE.Vector3(1.00, 0.80, 0.12), sat: 1.60, label: 'GOLDEN HOUR' },
+    infrared:    { tint: new THREE.Vector3(1.00, 0.18, 0.18), sat: 1.45, label: 'INFRARED' },
+    ultraviolet: { tint: new THREE.Vector3(0.38, 0.12, 1.00), sat: 1.60, label: 'ULTRAVIOLET' },
+    copper:      { tint: new THREE.Vector3(1.00, 0.62, 0.30), sat: 1.30, label: 'COPPER' },
+  };
+
+  const THEME_KEYS   = Object.keys(THEMES);
+  let   activeTheme  = 'milkyway';
+  let   themeTween   = null;  // { fromTint, toTint, fromSat, toSat, start, duration }
+
+  function applyTheme(key) {
+    const from = THEMES[activeTheme];
+    const to   = THEMES[key];
+    themeTween = {
+      fromTint: sharedUniforms.uTint.value.clone(),
+      toTint:   to.tint.clone(),
+      fromSat:  sharedUniforms.uSat.value,
+      toSat:    to.sat,
+      start:    performance.now(),
+      duration: 900,
+    };
+    activeTheme = key;
+    document.querySelectorAll('.theme-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.theme === key)
+    );
+    showToast('◈  ' + to.label);
+  }
+
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyTheme(btn.dataset.theme));
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Camera presets + smooth fly-to transition
+  // ─────────────────────────────────────────────────────────────────────────────
+  const CAM_PRESETS = {
+    'preset-top':  { pos: new THREE.Vector3(0,   180,  1),  target: new THREE.Vector3(0, 0, 0) },
+    'preset-eq':   { pos: new THREE.Vector3(0,   10,  152), target: new THREE.Vector3(0, 0, 0) },
+    'preset-dive': { pos: new THREE.Vector3(18,  22,   38), target: new THREE.Vector3(0, 2, 0) },
+  };
+
+  let camTransition = null;  // active fly-to animation
+  let activePreset  = null;
+
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+  }
+
+  // Generic fly-to — used by presets AND click-to-travel
+  function startFlyTo(toPos, toTarget, duration = 1600) {
+    camTransition = {
+      fromPos:    camera.position.clone(),
+      toPos:      toPos.clone(),
+      fromTarget: controls.target.clone(),
+      toTarget:   toTarget.clone(),
+      start:      performance.now(),
+      duration,
+    };
+    controls.autoRotate = false;
+    clearTimeout(idleTimer);
+  }
+
+  function flyTo(presetId) {
+    const preset = CAM_PRESETS[presetId];
+    startFlyTo(preset.pos, preset.target);
+    activePreset = presetId;
+    document.querySelectorAll('.cam-btn').forEach(b =>
+      b.classList.toggle('active', b.id === presetId)
+    );
+  }
+
+  // Wire preset buttons
+  document.querySelectorAll('.cam-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      flyTo(btn.id);
+      showToast({ 'preset-top': '↑ TOP DOWN', 'preset-eq': '→ EQUATORIAL', 'preset-dive': '↓ DIVE IN' }[btn.id]);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Click-to-travel — click anywhere on the canvas to fly there
+  // ─────────────────────────────────────────────────────────────────────────────
+  const raycaster   = new THREE.Raycaster();
+  const galaxyPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);  // Y = 0
+
+  function showTravelRipple(sx, sy) {
+    const el = document.createElement('div');
+    el.className  = 'travel-ripple';
+    el.style.left = sx + 'px';
+    el.style.top  = sy + 'px';
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Time scrub — Shift + horizontal drag
+  // ─────────────────────────────────────────────────────────────────────────────
+  const scrubBarEl    = document.getElementById('scrub-bar');
+  const scrubCursorEl = document.getElementById('scrub-cursor');
+  const scrubLabelEl  = document.getElementById('scrub-label');
+
+  let isScrubbing    = false;
+  let scrubLastX     = 0;
+  let scrubJustEnded = false;
+  let scrubHideTimer = null;
+
+  function setScrubUI(visible) {
+    scrubBarEl.classList.toggle('show', visible);
+    scrubLabelEl.classList.toggle('show', visible);
+    if (!visible) {
+      clearTimeout(scrubHideTimer);
+      scrubHideTimer = setTimeout(() => {
+        scrubBarEl.classList.remove('show');
+        scrubLabelEl.classList.remove('show');
+      }, 1200);
+    }
+  }
+
+  function updateScrubUI() {
+    const pct = (simTime % 120) / 120 * 100;
+    scrubCursorEl.style.left = pct.toFixed(2) + '%';
+    const m   = Math.floor(simTime / 60);
+    const sec = String(Math.floor(simTime % 60)).padStart(2, '0');
+    scrubLabelEl.textContent = `SHIFT + DRAG  ·  SIM ${m}:${sec}`;
+  }
+
+  window.addEventListener('pointermove', e => {
+    if (!isScrubbing) return;
+    const dx   = e.clientX - scrubLastX;
+    scrubLastX = e.clientX;
+    simTime    = Math.max(0, simTime + dx * 0.10);   // 1 px = 0.1 sim-seconds
+    updateScrubUI();
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (!isScrubbing) return;
+    isScrubbing    = false;
+    scrubJustEnded = true;
+    setTimeout(() => { scrubJustEnded = false; }, 150);
+    controls.enabled = true;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { controls.autoRotate = true; }, 3000);
+    setScrubUI(false);
+  });
+
+  let pointerDownAt = null;
+
+  renderer.domElement.addEventListener('pointerdown', e => {
+    if (e.shiftKey) {
+      isScrubbing      = true;
+      scrubLastX       = e.clientX;
+      controls.enabled = false;
+      clearTimeout(idleTimer);
+      setScrubUI(true);
+      updateScrubUI();
+      return;   // skip travel tracking
+    }
+
+    pointerDownAt = { x: e.clientX, y: e.clientY };
+
+    if (!camTransition) {
+      activePreset = null;
+      document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+    }
+  });
+
+  renderer.domElement.addEventListener('click', e => {
+    if (scrubJustEnded) return;   // release after scrub — not a travel click
+
+    // Ignore if it was a drag (moved more than 6 px)
+    if (pointerDownAt) {
+      const dx = e.clientX - pointerDownAt.x;
+      const dy = e.clientY - pointerDownAt.y;
+      if (dx * dx + dy * dy > 36) return;
+    }
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    const ndc  = new THREE.Vector2(
+       ((e.clientX - rect.left) / rect.width)  * 2 - 1,
+      -((e.clientY - rect.top)  / rect.height) * 2 + 1
+    );
+
+    raycaster.setFromCamera(ndc, camera);
+
+    const planeHit = new THREE.Vector3();
+    const hit = raycaster.ray.intersectPlane(galaxyPlane, planeHit);
+
+    // Core click → wormhole (plane hit within 8 world-units of origin)
+    if (hit && planeHit.length() < 8 && wormState === 'idle') {
+      triggerWormhole();
+      showTravelRipple(e.clientX, e.clientY);
+      return;
+    }
+
+    // Bail if no intersection or it's absurdly far (horizon clicks)
+    if (!hit || camera.position.distanceTo(planeHit) > 550) return;
+
+    // New camera position: same approach direction, fixed 45 u from target
+    const approach = new THREE.Vector3()
+      .subVectors(camera.position, controls.target)
+      .normalize()
+      .multiplyScalar(45);
+
+    const newCamPos = new THREE.Vector3().addVectors(planeHit, approach);
+    newCamPos.y = Math.max(newCamPos.y, 12);  // never dip below disc
+
+    // Clear preset buttons — this is a free-form travel
+    activePreset = null;
+    document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+
+    startFlyTo(newCamPos, planeHit, 1300);
+    showTravelRipple(e.clientX, e.clientY);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Hover star info — raycasting tooltip (throttled to every 4th frame)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const starTipEl  = document.getElementById('star-tip');
+  const tipClsEl   = document.getElementById('star-tip-cls');
+  const tipClassEl = document.getElementById('tip-class');
+  const tipTempEl  = document.getElementById('tip-temp');
+  const tipDistEl  = document.getElementById('tip-dist');
+
+  let hoverX = -1, hoverY = -1;
+  let tooltipEnabled = false;
+
+  function classifyStar(r, g, b) {
+    if (b > 0.97) {
+      const temp = Math.round(10000 + (1.0 - r) * 160000);
+      return r < 0.84
+        ? { cls: 'O', temp: Math.min(temp, 50000), color: '#6699ff' }
+        : { cls: 'B', temp: Math.min(temp, 28000), color: '#aaccff' };
+    }
+    if (b > 0.60 && r > 0.90 && g > 0.82) {
+      const temp = Math.round(5200 + (b - 0.55) * 12000);
+      return b > 0.68
+        ? { cls: 'F', temp: Math.min(temp, 7800), color: '#ffffdd' }
+        : { cls: 'G', temp: Math.min(temp, 6300), color: '#ffee88' };
+    }
+    if (g > 0.70) {
+      return { cls: 'K', temp: Math.round(3700 + (g - 0.70) * 7000), color: '#ffaa44' };
+    }
+    return { cls: 'M', temp: Math.round(2400 + g * 1900), color: '#ff7755' };
+  }
+
+  window.addEventListener('mousemove', e => { hoverX = e.clientX; hoverY = e.clientY; });
+  renderer.domElement.addEventListener('mouseleave', () => {
+    hoverX = -1; hoverY = -1;
+    starTipEl.style.display = 'none';
+  });
+
+  function updateStarHover() {
+    if (!tooltipEnabled || hoverX < 0 || !starPointsRef || isScrubbing) {
+      starTipEl.style.display = 'none';
+      return;
+    }
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    const ndc  = new THREE.Vector2(
+       ((hoverX - rect.left) / rect.width)  * 2 - 1,
+      -((hoverY - rect.top)  / rect.height) * 2 + 1
+    );
+
+    raycaster.setFromCamera(ndc, camera);
+    raycaster.params.Points.threshold = 1.8;
+
+    const hits = raycaster.intersectObject(starPointsRef);
+    if (hits.length === 0) { starTipEl.style.display = 'none'; return; }
+
+    const idx  = hits[0].index;
+    const geo  = starPointsRef.geometry;
+    const cr   = geo.attributes.aColor.getX(idx);
+    const cg   = geo.attributes.aColor.getY(idx);
+    const cb   = geo.attributes.aColor.getZ(idx);
+    const dist = geo.attributes.aRadius.getX(idx);
+
+    const info = classifyStar(cr, cg, cb);
+
+    tipClsEl.textContent   = info.cls;
+    tipClsEl.style.color   = info.color;
+    tipClassEl.textContent = info.cls + '-type';
+    tipTempEl.textContent  = info.temp.toLocaleString() + ' K';
+    tipDistEl.textContent  = dist.toFixed(1) + ' kly';
+
+    const tx = Math.min(hoverX + 18, window.innerWidth  - 154);
+    const ty = Math.max(hoverY - 95, 8);
+    starTipEl.style.left    = tx + 'px';
+    starTipEl.style.top     = ty + 'px';
+    starTipEl.style.display = 'block';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Wormhole / black hole dive — click the galactic core to trigger
+  // ─────────────────────────────────────────────────────────────────────────────
+  const wormFlashEl = document.getElementById('wormhole-flash');
+
+  // Concentric glowing rings — geometry rotation baked in so mesh.rotation.y spins correctly
+  const wormGroup = new THREE.Group();
+  scene.add(wormGroup);
+
+  const wormRings = [
+    { inner: 1.4, outer:  3.2, opacity: 0.95, color: 0xffffff },
+    { inner: 4.5, outer:  7.0, opacity: 0.60, color: 0x88ccff },
+    { inner: 9.0, outer: 12.5, opacity: 0.35, color: 0x3377ee },
+    { inner: 15,  outer: 20,   opacity: 0.16, color: 0x1133aa },
+  ].map(({ inner, outer, opacity, color }) => {
+    const geo = new THREE.RingGeometry(inner, outer, 80);
+    geo.rotateX(-Math.PI / 2);   // bake: lies flat in XZ plane
+    const mat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0,
+      side: THREE.DoubleSide, depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    mat.userData = { maxOpacity: opacity };
+    const mesh = new THREE.Mesh(geo, mat);
+    wormGroup.add(mesh);
+    return mesh;
+  });
+
+  wormGroup.visible = false;
+
+  // State
+  let wormState      = 'idle';   // idle | diving | flash | emerging
+  let wormElapsed    = 0;
+  let wormTeleported = false;
+  let wormPrevTheme  = 'milkyway';
+  const wormFromPos  = new THREE.Vector3();
+  const wormFromTgt  = new THREE.Vector3();
+  const _wZero       = new THREE.Vector3(0, 0, 0);
+
+  // Emerge inside the galaxy (close, dramatic) then pull far to a side view
+  const WORM_DUR   = { diving: 3.0, flash: 0.45, emerging: 3.5 };
+  const DIVE_END   = new THREE.Vector3(0, 0.6, 1.0);
+  const EMERGE_STA = new THREE.Vector3(10, 5, 22);    // inside galaxy, close
+  const EMERGE_END = new THREE.Vector3(140, 35, 75);  // wide side-angle view
+
+  // Which theme feels like "another universe" relative to the current one
+  const WORM_CONTRAST = {
+    milkyway: 'ultraviolet', neon: 'solar',      synthwave: 'arctic',  mono: 'solar',
+    solar:    'neon',        arctic: 'infrared', golden:    'ultraviolet',
+    infrared: 'arctic',      ultraviolet: 'golden', copper: 'neon',
+  };
+
+  function easeInCubic(t)  { return t * t * t; }
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function triggerWormhole() {
+    if (wormState !== 'idle') return;
+    wormPrevTheme  = activeTheme;
+    wormState      = 'diving';
+    wormElapsed    = 0;
+    wormTeleported = false;
+    wormFromPos.copy(camera.position);
+    wormFromTgt.copy(controls.target);
+    camTransition    = null;
+    controls.enabled = false;
+    wormGroup.visible = true;
+    wormGroup.scale.setScalar(1);
+    wormRings.forEach(r => { r.material.opacity = 0; r.rotation.y = 0; });
+    showToast('◉  SINGULARITY DETECTED');
+  }
+
+  function updateWormhole(delta) {
+    if (wormState === 'idle') return;
+    wormElapsed += delta;
+
+    if (wormState === 'diving') {
+      const t = Math.min(wormElapsed / WORM_DUR.diving, 1.0);
+      const e = easeInCubic(t);
+
+      // Lightspeed tunnel builds up as we accelerate in
+      tunnelUniforms.uProgress.value = e;
+
+      camera.position.lerpVectors(wormFromPos, DIVE_END, e);
+      controls.target.lerpVectors(wormFromTgt, _wZero, Math.min(t * 2.5, 1.0));
+      camera.lookAt(controls.target);
+
+      const ringAlpha = Math.min(t / 0.28, 1.0);
+      wormRings.forEach((r, i) => {
+        r.material.opacity = r.material.userData.maxOpacity * ringAlpha;
+        r.rotation.y += delta * (0.7 + i * 0.30);
+      });
+      wormGroup.scale.setScalar(1.0 + e * 14);
+
+      if (t >= 1.0) {
+        wormState   = 'flash';
+        wormElapsed = 0;
+        tunnelUniforms.uProgress.value = 1.0;
+        wormFlashEl.style.opacity = '1';
+      }
+
+    } else if (wormState === 'flash') {
+      const t = Math.min(wormElapsed / WORM_DUR.flash, 1.0);
+      wormFlashEl.style.opacity = String(1.0 - easeOutCubic(t));
+
+      if (!wormTeleported && wormElapsed > 0.07) {
+        wormTeleported = true;
+
+        // Land inside the galaxy — alien perspective, looking at the core
+        camera.position.copy(EMERGE_STA);
+        controls.target.copy(_wZero);
+        camera.lookAt(_wZero);
+
+        // Switch palette so it feels like a different universe
+        applyTheme(WORM_CONTRAST[wormPrevTheme] || 'neon');
+        showToast('◈  ANOTHER UNIVERSE');
+
+        // Rings open on the exit side — start tight, will expand outward
+        wormGroup.visible = true;
+        wormGroup.scale.setScalar(0.4);
+        wormRings.forEach(r => {
+          r.material.opacity = r.material.userData.maxOpacity;
+          r.rotation.y = Math.random() * Math.PI * 2;
+        });
+      }
+
+      if (t >= 1.0) {
+        wormState   = 'emerging';
+        wormElapsed = 0;
+        wormFlashEl.style.opacity = '0';
+        triggerPulse();   // shockwave as you exit
+      }
+
+    } else if (wormState === 'emerging') {
+      const t = Math.min(wormElapsed / WORM_DUR.emerging, 1.0);
+      const e = easeOutCubic(t);  // fast escape → slows to a drift
+
+      // Lightspeed tunnel decelerates as we exit — fades out over first 60% of emergence
+      tunnelUniforms.uProgress.value = Math.max(0.0, 1.0 - t * 1.65);
+
+      // Pull back dramatically from inside galaxy to a sweeping side view
+      camera.position.lerpVectors(EMERGE_STA, EMERGE_END, e);
+      controls.target.copy(_wZero);
+      camera.lookAt(_wZero);
+
+      // Exit rings expand outward and fade
+      const ringScale = 0.4 + e * 6;
+      const ringFade  = Math.max(0, 1.0 - t * 1.5);
+      wormGroup.scale.setScalar(ringScale);
+      wormRings.forEach((r, i) => {
+        r.material.opacity = r.material.userData.maxOpacity * ringFade;
+        r.rotation.y += delta * (0.35 + i * 0.18);
+      });
+      if (ringFade <= 0) wormGroup.visible = false;
+
+      if (t >= 1.0) {
+        wormState = 'idle';
+        tunnelUniforms.uProgress.value = 0.0;
+        wormGroup.visible = false;
+        controls.enabled = true;
+        controls.target.copy(_wZero);
+        controls.saveState();
+        activePreset = null;
+        document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+        idleTimer = setTimeout(() => { controls.autoRotate = true; }, 5000);
+        setTimeout(() => { if (wormState === 'idle') applyTheme(wormPrevTheme); }, 3500);
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Fullscreen
+  // ─────────────────────────────────────────────────────────────────────────────
+  const btnFS       = document.getElementById('btn-fullscreen');
+  const iconExpand  = document.getElementById('icon-expand');
+  const iconCompress= document.getElementById('icon-compress');
+
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  function toggleFullscreen() {
+    if (!isFullscreen()) {
+      const el = document.documentElement;
+      (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+  }
+
+  function syncFullscreenIcon() {
+    const fs = isFullscreen();
+    iconExpand.style.display   = fs ? 'none'  : 'block';
+    iconCompress.style.display = fs ? 'block' : 'none';
+  }
+
+  btnFS.addEventListener('click', () => { toggleFullscreen(); showToast('⛶  FULLSCREEN'); });
+  document.addEventListener('fullscreenchange',       syncFullscreenIcon);
+  document.addEventListener('webkitfullscreenchange', syncFullscreenIcon);
+
+  // ── Screenshot ──────────────────────────────────────────────────────────────
+  const captureFlashEl = document.getElementById('capture-flash');
+
+  function takeScreenshot() {
+    // Flash the UI
+    captureFlashEl.classList.add('pop');
+    requestAnimationFrame(() => {
+      captureFlashEl.classList.remove('pop');
+    });
+
+    // Render a fresh frame so preserveDrawingBuffer has latest output
+    grainVigPass.uniforms.uTime.value = performance.now() / 1000;
+    composer.render();
+
+    const dataURL = renderer.domElement.toDataURL('image/png');
+    const link    = document.createElement('a');
+    link.download = `galaxia-${new Date().toISOString().slice(0,19).replace(/[T:]/g,'-')}.png`;
+    link.href     = dataURL;
+    link.click();
+    showToast('◎  SCREENSHOT SAVED');
+  }
+
+  document.getElementById('btn-screenshot').addEventListener('click', takeScreenshot);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Keyboard shortcuts
+  // ─────────────────────────────────────────────────────────────────────────────
+  window.addEventListener('keydown', (e) => {
+    // Ignore if user is typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    switch (e.code) {
+
+      case 'Space':
+        e.preventDefault();
+        paused = !paused;
+        lastTick = performance.now();  // sync tick so no time jump on resume
+        document.getElementById('paused-badge').classList.toggle('show', paused);
+        showToast(paused ? '⏸  PAUSED' : '▶  RESUMED');
+        break;
+
+      case 'KeyR':
+        controls.reset();
+        showToast('↺  CAMERA RESET');
+        break;
+
+      case 'KeyP':
+        triggerPulse();
+        showToast('◎  PULSE');
+        break;
+
+      case 'Equal':       // + / =
+      case 'NumpadAdd':
+        if (arms < 12) {
+          arms++;
+          rebuildGalaxy();
+          showToast(`✦  ARMS: ${arms}`);
+        } else {
+          showToast('✦  MAX ARMS: 12');
+        }
+        break;
+
+      case 'Minus':
+      case 'NumpadSubtract':
+        if (arms > 2) {
+          arms--;
+          rebuildGalaxy();
+          showToast(`✦  ARMS: ${arms}`);
+        } else {
+          showToast('✦  MIN ARMS: 2');
+        }
+        break;
+
+      case 'KeyW':
+        if (!e.repeat) {
+          warpActive = true;
+          warpTarget = 1.0;
+          showToast('⚡  WARP SPEED');
+        }
+        break;
+
+      case 'KeyI':
+        tooltipEnabled = !tooltipEnabled;
+        if (!tooltipEnabled) starTipEl.style.display = 'none';
+        showToast(tooltipEnabled ? '◎  STAR INFO ON' : '◎  STAR INFO OFF');
+        break;
+
+      case 'KeyT': {
+        const next = THEME_KEYS[(THEME_KEYS.indexOf(activeTheme) + 1) % THEME_KEYS.length];
+        applyTheme(next);
+        break;
+      }
+
+      case 'ArrowUp':    flyTo('preset-top');  showToast('↑  TOP DOWN');    break;
+      case 'ArrowRight': flyTo('preset-eq');   showToast('→  EQUATORIAL');  break;
+      case 'ArrowDown':  flyTo('preset-dive'); showToast('↓  DIVE IN');     break;
+
+      case 'KeyF':
+        toggleFullscreen();
+        break;
+
+      case 'KeyS':
+        takeScreenshot();
+        break;
+
+      case 'KeyG':
+        tourStart();
+        break;
+
+      case 'KeyM':
+        mpTogglePanel();
+        break;
+
+      case 'Slash':       // ? (Shift+/)
+        if (e.shiftKey) toggleHelp();
+        break;
+    }
+  });
+
+  // Release W to end warp
+  window.addEventListener('keyup', e => {
+    if (e.code === 'KeyW') { warpActive = false; warpTarget = 0.0; }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // HUD — galaxy telemetry panel
+  // ─────────────────────────────────────────────────────────────────────────────
+  const hudFps       = document.getElementById('hud-fps');
+  const hudParticles = document.getElementById('hud-particles');
+  const hudArms      = document.getElementById('hud-arms');
+  const hudDist      = document.getElementById('hud-dist');
+  const hudTime      = document.getElementById('hud-time');
+
+  // Total particles = 120k stars + 13k+10k+8k nebula + 8k background
+  const TOTAL_PARTICLES = 120_000 + 13_000 + 10_000 + 8_000 + 8_000;
+  hudParticles.textContent = (TOTAL_PARTICLES / 1000).toFixed(0) + 'K';
+
+  let fpsLast  = performance.now();
+  let fpsCount = 0;
+  let fpsAccum = 0;
+
+  function formatSimTime(s) {
+    const m   = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  function updateHUD() {
+    hudFps.textContent  = Math.round(fpsCount / (fpsAccum / 1000)) + ' fps';
+    hudArms.textContent = arms;
+    hudDist.textContent = Math.round(camera.position.length()) + 'u';
+    hudTime.textContent = formatSimTime(simTime);
+    fpsCount = 0;
+    fpsAccum = 0;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Resize
+  // ─────────────────────────────────────────────────────────────────────────────
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    tunnelUniforms.uAspect.value = window.innerWidth / window.innerHeight;
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Hint fade
+  // ─────────────────────────────────────────────────────────────────────────────
+  setTimeout(() => document.getElementById('hint').classList.add('hidden'), 14000);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Render Loop
+  // ─────────────────────────────────────────────────────────────────────────────
+  let animFrame = 0;
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const now   = performance.now();
+    const delta = (now - lastTick) / 1000;
+
+    // Advance sim time only when not paused
+    if (!paused) simTime += delta;
+    lastTick = now;
+
+    updateComets(delta);
+    updateCursor(delta);
+
+    // Warp tween — ramps up fast (0.4 s), eases back slower (0.7 s)
+    const warpSpeed = warpActive ? 2.5 : 1.4;
+    const warpDelta = warpTarget - warpUniforms.uWarpLen.value;
+    if (Math.abs(warpDelta) > 0.001) {
+      warpUniforms.uWarpLen.value = Math.max(0, Math.min(1,
+        warpUniforms.uWarpLen.value + Math.sign(warpDelta) * warpSpeed * delta
+      ));
+    }
+    if (warpLinesRef) warpLinesRef.visible = warpUniforms.uWarpLen.value > 0.001;
+
+    // HUD update — every 600 ms
+    fpsCount++;
+    fpsAccum += now - fpsLast;
+    fpsLast   = now;
+    if (fpsAccum >= 600) updateHUD();
+
+    sharedUniforms.uTime.value = simTime;
+
+    // Theme colour tween
+    if (themeTween) {
+      const t = Math.min((performance.now() - themeTween.start) / themeTween.duration, 1);
+      const e = easeInOutCubic(t);
+      sharedUniforms.uTint.value.lerpVectors(themeTween.fromTint, themeTween.toTint, e);
+      sharedUniforms.uSat.value = themeTween.fromSat + (themeTween.toSat - themeTween.fromSat) * e;
+      if (t >= 1) themeTween = null;
+    }
+
+    // Pulse envelope — sin bell 0 → peak → 0 over PULSE_DUR
+    const elapsed = simTime - pulseStart;
+    sharedUniforms.uPulse.value = elapsed < PULSE_DUR
+      ? Math.sin((elapsed / PULSE_DUR) * Math.PI)
+      : 0.0;
+
+    controls.update();
+
+    // Camera fly-to — applied after controls.update() so it wins each frame
+    if (camTransition) {
+      const t = Math.min((performance.now() - camTransition.start) / camTransition.duration, 1);
+      const e = easeInOutCubic(t);
+      camera.position.lerpVectors(camTransition.fromPos, camTransition.toPos, e);
+      controls.target.lerpVectors(camTransition.fromTarget, camTransition.toTarget, e);
+      camera.lookAt(controls.target);
+      if (t >= 1) {
+        camTransition = null;
+        idleTimer = setTimeout(() => { controls.autoRotate = true; }, 4000);
+      }
+    }
+
+    // Galaxy formation reveal — runs once after splash dismissed
+    updateFormation(performance.now());
+
+    // Cinematic tour camera drive
+    updateTour(now);
+
+    // Wormhole camera drive — after controls.update() so it wins each frame
+    updateWormhole(delta);
+
+    // Audio-reactive galaxy visuals
+    updateAudioReactivity(now, delta);
+
+    if (animFrame++ % 4 === 0) updateStarHover();
+
+    grainVigPass.uniforms.uTime.value = performance.now() / 1000;
+    composer.render();
+
+    // Lightspeed tunnel overlay — composited on top when active
+    if (tunnelUniforms.uProgress.value > 0.001) {
+      tunnelUniforms.uTime.value = performance.now() / 1000;
+      renderer.autoClear = false;
+      renderer.render(tunnelScene, tunnelCam);
+      renderer.autoClear = true;
+    }
+  }
+
+  // ── Custom cursor ─────────────────────────────────────────────────────────────
+  const cursorDot  = document.getElementById('cursor-dot');
+  const cursorRing = document.getElementById('cursor-ring');
+  let curMx = -200, curMy = -200;
+  let curRx = -200, curRy = -200;
+  let curAngle = 0;
+
+  window.addEventListener('mousemove', e => {
+    curMx = e.clientX; curMy = e.clientY;
+    cursorDot.style.opacity = '1';
+    cursorRing.style.opacity = '1';
+    const dh = (cursorDot.offsetWidth || 6) / 2;
+    cursorDot.style.transform = `translate(${curMx - dh}px, ${curMy - dh}px)`;
+  });
+
+  window.addEventListener('mouseleave', () => {
+    cursorDot.style.opacity  = '0';
+    cursorRing.style.opacity = '0';
+  });
+
+  document.addEventListener('mouseover', e => {
+    const isInteractive = !!e.target.closest('button, a, input, select, label');
+    document.body.classList.toggle('cursor-pointer', isInteractive);
+  });
+
+  function updateCursor(delta) {
+    curRx += (curMx - curRx) * 0.10;
+    curRy += (curMy - curRy) * 0.10;
+    curAngle += delta * 18;
+    const rh = (cursorRing.offsetWidth || 28) / 2;
+    const dh2 = (cursorDot.offsetWidth || 6) / 2;
+    cursorRing.style.transform = `translate(${curRx - rh}px, ${curRy - rh}px) rotate(${curAngle}deg)`;
+    // Keep dot centred during hover-state size transitions too
+    cursorDot.style.transform  = `translate(${curMx - dh2}px, ${curMy - dh2}px)`;
+    const onStar = starTipEl && starTipEl.style.display !== 'none';
+    document.body.classList.toggle('cursor-star', onStar && !document.body.classList.contains('cursor-pointer'));
+  }
+
+  // ── Music Player ──────────────────────────────────────────────────────────────
+  const MUSIC_GENRES = [
+    { id:'lofi',      label:'Lofi',      videos:['jfKfPfyJRdk','5qap5aO4i9A'],  rotateSpeed:0.14 },
+    { id:'ambient',   label:'Space',     videos:['h4DmJAPsI7I','UF8uR6Z6KLc','aXf_tnFMtl4'],  rotateSpeed:0.06 },
+    { id:'synthwave', label:'Synthwave', videos:['4xDzrJKXOOY','b9WdhIRdVlY'],  rotateSpeed:0.32 },
+    { id:'focus',     label:'Focus',     videos:['n61ULEU7CO0','7NOSDKb0HlU'],  rotateSpeed:0.09 },
+    { id:'jazz',      label:'Jazz',      videos:['Dx5qFachd3A','kQ5aGZHNJRo'],  rotateSpeed:0.20 },
+    { id:'classical', label:'Classical', videos:['jgpJVI3tDbY','4To2bB0QP14'],  rotateSpeed:0.11 },
+  ];
+
+  let ytPlayer      = null;
+  let ytReady       = false;
+  let mpPlaying     = false;
+  let mpGenreIdx    = 0;
+  let mpVideoIdx    = 0;
+  let mpPanelOpen   = false;
+  let mpProgTimer   = null;
+  let isLocalAudio  = false;
+
+  const pilDotEl   = document.getElementById('pill-dot');
+  const pilGenreEl = document.getElementById('pill-genre');
+  const pilTrackEl = document.getElementById('pill-track');
+  const mpTitleEl  = document.getElementById('mp-title');
+  const mpChanEl   = document.getElementById('mp-channel');
+  const mpFillEl   = document.getElementById('mp-fill');
+  const mpTimeEl   = document.getElementById('mp-time');
+  const mpVolEl    = document.getElementById('mp-vol');
+  const mpGenresEl = document.getElementById('mp-genres');
+  const mpPanelEl  = document.getElementById('music-panel');
+
+  // Build genre buttons
+  MUSIC_GENRES.forEach((g, i) => {
+    const b = document.createElement('button');
+    b.className = 'mp-genre-btn' + (i === 0 ? ' active' : '');
+    b.textContent = g.label;
+    b.addEventListener('click', () => mpSwitchGenre(i));
+    mpGenresEl.appendChild(b);
+  });
+
+  function mpTogglePanel(force) {
+    mpPanelOpen = force !== undefined ? force : !mpPanelOpen;
+    mpPanelEl.classList.toggle('open', mpPanelOpen);
+    document.getElementById('mp-toggle').textContent = mpPanelOpen ? '▼ close' : '▲ open';
+  }
+
+  function mpSyncUI() {
+    const icon = mpPlaying ? '⏸' : '▶';
+    document.getElementById('pill-play').textContent  = icon;
+    document.getElementById('mp-play-btn').textContent = icon;
+    pilDotEl.classList.toggle('stopped', !mpPlaying);
+  }
+
+  function mpTogglePlay() {
+    if (!ytReady) { showToast('♪  SERVE VIA HTTP FOR AUDIO'); return; }
+    if (mpPlaying) {
+      ytPlayer.pauseVideo();
+    } else {
+      ytPlayer.playVideo();
+      // Update UI optimistically — don't wait for the PLAYING event
+      mpPlaying = true;
+      mpSyncUI();
+    }
+  }
+
+  function fmtTime(s) {
+    if (!isFinite(s) || s < 0) return '—';
+    const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2,'0')}`;
+  }
+
+  function mpUpdateTrack() {
+    if (!ytReady) return;
+    try {
+      const d = ytPlayer.getVideoData();
+      if (d && d.title) {
+        mpTitleEl.textContent  = d.title;
+        mpChanEl.textContent   = d.author || '';
+        pilTrackEl.textContent = d.title;
+      }
+    } catch(e) {}
+  }
+
+  function mpStartProgress() {
+    clearInterval(mpProgTimer);
+    mpProgTimer = setInterval(() => {
+      if (!ytReady || !mpPlaying) return;
+      try {
+        const cur = ytPlayer.getCurrentTime(), dur = ytPlayer.getDuration();
+        if (dur > 0) {
+          mpFillEl.style.width = ((cur / dur) * 100) + '%';
+          mpTimeEl.textContent  = fmtTime(cur) + ' / ' + fmtTime(dur);
+        }
+      } catch(e) {}
+    }, 800);
+  }
+
+  function mpSwitchGenre(idx) {
+    mpGenreIdx = idx; mpVideoIdx = 0;
+    const g = MUSIC_GENRES[idx];
+    mpGenresEl.querySelectorAll('.mp-genre-btn').forEach((b,i) => b.classList.toggle('active', i === idx));
+    pilGenreEl.textContent = g.label;
+    controls.autoRotateSpeed = g.rotateSpeed;
+    if (ytReady) ytPlayer.loadVideoById(g.videos[0]);
+    showToast('♪  ' + g.label.toUpperCase());
+  }
+
+  function mpNext() {
+    const vids = MUSIC_GENRES[mpGenreIdx].videos;
+    mpVideoIdx = (mpVideoIdx + 1) % vids.length;
+    if (ytReady) ytPlayer.loadVideoById(vids[mpVideoIdx]);
+  }
+
+  function mpPrev() {
+    if (ytReady) { try { if (ytPlayer.getCurrentTime() > 5) { ytPlayer.seekTo(0); return; } } catch(e){} }
+    const vids = MUSIC_GENRES[mpGenreIdx].videos;
+    mpVideoIdx = (mpVideoIdx - 1 + vids.length) % vids.length;
+    if (ytReady) ytPlayer.loadVideoById(vids[mpVideoIdx]);
+  }
+
+  document.getElementById('mp-toggle').addEventListener('click', () => mpTogglePanel());
+  document.getElementById('mp-close').addEventListener('click',  () => mpTogglePanel(false));
+  document.getElementById('mp-play-btn').addEventListener('click', mpTogglePlay);
+  document.getElementById('pill-play').addEventListener('click',   mpTogglePlay);
+  document.getElementById('mp-next').addEventListener('click',  mpNext);
+  document.getElementById('pill-next').addEventListener('click', mpNext);
+  document.getElementById('mp-prev').addEventListener('click',  mpPrev);
+  document.getElementById('pill-prev').addEventListener('click', mpPrev);
+  mpVolEl.addEventListener('input', () => { if (ytReady) ytPlayer.setVolume(+mpVolEl.value); });
+  document.getElementById('mp-progress-track').addEventListener('click', e => {
+    if (!ytReady) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    ytPlayer.seekTo(ytPlayer.getDuration() * ((e.clientX - r.left) / r.width), true);
+  });
+
+  // YouTube IFrame API
+  window.onYouTubeIframeAPIReady = function() {
+    ytPlayer = new YT.Player('yt-player', {
+      width: 1, height: 1,
+      videoId: MUSIC_GENRES[0].videos[0],
+      playerVars: { autoplay: 0, controls: 0, fs: 0, rel: 0, modestbranding: 1, iv_load_policy: 3 },
+      events: {
+        onReady(e) {
+          ytReady = true;
+          e.target.setVolume(70);
+          mpTitleEl.textContent = 'Press ▶ to begin';
+          mpStartProgress();
+        },
+        onStateChange(e) {
+          // BUFFERING (3) = loading but intending to play — treat as playing so button stays ⏸
+          mpPlaying = (e.data === YT.PlayerState.PLAYING || e.data === 3);
+          mpSyncUI();
+          if (e.data === YT.PlayerState.PLAYING) setTimeout(mpUpdateTrack, 600);
+          if (e.data === YT.PlayerState.ENDED) mpNext();
+        },
+      },
+    });
+  };
+
+  // Inject YouTube IFrame API script
+  (function() {
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(s);
+  })();
+
+  // ── Audio Engine ──────────────────────────────────────────────────────────────
+  const localAudio = new Audio();
+  localAudio.crossOrigin = 'anonymous';
+  localAudio.loop = true;
+
+  let audioCtx    = null;
+  let analyser    = null;
+  let freqData    = null;
+  let localSource = null;
+
+  // Beat detection — rolling energy history
+  const BEAT_HISTORY  = 30;
+  const beatHistory   = new Float32Array(BEAT_HISTORY);
+  let   beatHistIdx   = 0;
+  let   lastBeatTime  = 0;
+
+  // BPM-based phase for simulated beat (YouTube = CORS-blocked from real FFT)
+  let bpmPhase       = 0;
+  let lastAudioFrame = null;
+
+  // Tint targets used during audio reactivity
+  const warmTint = new THREE.Vector3(1.00, 0.55, 0.12);
+  const coolTint = new THREE.Vector3(0.28, 0.72, 1.00);
+
+  function initAudioCtx() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.80;
+    freqData = new Uint8Array(analyser.frequencyBinCount); // 128 bins
+    analyser.connect(audioCtx.destination);
+  }
+
+  function connectLocal(audioEl) {
+    initAudioCtx();
+    if (localSource) { try { localSource.disconnect(); } catch(e){} localSource = null; }
+    localSource = audioCtx.createMediaElementSource(audioEl);
+    localSource.connect(analyser);
+  }
+
+  function freqAvg(start, end) {
+    if (!freqData) return 0;
+    let sum = 0;
+    for (let i = start; i < end; i++) sum += freqData[i];
+    return sum / ((end - start) * 255);
+  }
+
+  function getRealAudio() {
+    if (!analyser || !freqData) return null;
+    analyser.getByteFrequencyData(freqData);
+    const bass   = freqAvg(0, 6);
+    const mid    = freqAvg(6, 28);
+    const treble = freqAvg(28, 85);
+    const energy = bass * 0.50 + mid * 0.30 + treble * 0.20;
+    return { bass, mid, treble, energy };
+  }
+
+  // Genre BPM + harmonic profiles for rich simulated waveforms
+  const GENRE_BPM = { lofi:80, ambient:60, synthwave:130, focus:100, jazz:120, classical:72 };
+
+  // Per-genre harmonic character: [freq multipliers] + [relative weights]
+  const GENRE_PROFILE = {
+    lofi:      { h:[1, 2.07, 3.91],          w:[1.0, 0.28, 0.11], driftRate:0.031 },
+    ambient:   { h:[1, 1.51, 4.17],          w:[0.6, 0.52, 0.18], driftRate:0.018 },
+    synthwave: { h:[1, 2,    4,    8   ],     w:[1.0, 0.72, 0.38, 0.18], driftRate:0.055 },
+    focus:     { h:[1, 2.98, 5.13],          w:[0.8, 0.35, 0.16], driftRate:0.028 },
+    jazz:      { h:[1, 1.33, 2.51, 3.67],    w:[0.8, 0.62, 0.29, 0.22], driftRate:0.042 },
+    classical: { h:[1, 2,    3,    4   ],     w:[0.9, 0.48, 0.22, 0.09], driftRate:0.022 },
+  };
+
+  // Slow drift oscillators — make every beat cycle subtly different
+  let driftPhaseA = 0;  // amplitude drift (0.031 – 0.055 rad/s)
+  let driftPhaseB = 0;  // timbral drift  (prime-ratio offset)
+  let simAudioData = null;  // expose to drawVisualizer
+
+  function getSimulatedAudio(now) {
+    if (!mpPlaying) return { bass:0, mid:0, treble:0, energy:0, raw:[] };
+    const gid   = MUSIC_GENRES[mpGenreIdx]?.id || 'lofi';
+    const bps   = (GENRE_BPM[gid] || 90) / 60;
+    const prof  = GENRE_PROFILE[gid] || GENRE_PROFILE.lofi;
+    const dt    = lastAudioFrame !== null ? (now - lastAudioFrame) / 1000 : 0;
+    lastAudioFrame = now;
+
+    // Advance all phases
+    bpmPhase   += dt * bps * Math.PI * 2;
+    driftPhaseA += dt * prof.driftRate;
+    driftPhaseB += dt * prof.driftRate * 1.618;  // golden ratio offset = aperiodic
+
+    // Amplitude envelope per harmonic — drifts slowly so each beat feels different
+    const ampMod = 0.78 + 0.22 * Math.sin(driftPhaseA);         // overall amplitude swell
+    const timMod = 0.82 + 0.18 * Math.sin(driftPhaseB * 0.71);  // timbral shade
+
+    // Compute frequency bins using harmonic profile
+    const rawBins = prof.h.map((hf, i) => {
+      const v = Math.max(0, Math.sin(bpmPhase * hf + i * 0.7));
+      return v * prof.w[i] * ampMod * (i % 2 === 0 ? timMod : (2 - timMod));
+    });
+
+    // Map bins to bass / mid / treble frequency regions
+    const bass   = Math.min(1, rawBins[0] * 0.85 + rawBins[1] * 0.15 + 0.09) * ampMod;
+    const mid    = Math.min(1, (rawBins[1] || 0) * 0.55 + (rawBins[2] || 0) * 0.45 + 0.07) * timMod;
+    const treble = Math.min(1, ((rawBins[2] || 0) * 0.6 + (rawBins[3] || 0) * 0.4 + 0.04));
+    const energy = bass * 0.50 + mid * 0.30 + treble * 0.20;
+
+    // Expose full bin array to visualizer
+    simAudioData = rawBins;
+
+    return { bass, mid, treble, energy, raw: rawBins };
+  }
+
+  // detectBeat now returns beat energy (0 = no beat) for variable pulse strength
+  function detectBeat(energy) {
+    const avg    = beatHistory.reduce((a, b) => a + b, 0) / BEAT_HISTORY;
+    beatHistory[beatHistIdx % BEAT_HISTORY] = energy;
+    beatHistIdx++;
+    const gap    = performance.now() - lastBeatTime;
+    const thresh = Math.max(avg * 1.42, 0.20);
+    if (energy > thresh && gap > 280) {
+      lastBeatTime = performance.now();
+      return energy;   // return magnitude so caller can scale effects
+    }
+    return 0;
+  }
+
+  // Beat variety cycle — each beat accent does something different
+  let beatAccentIdx = 0;
+  // Bloom target is set per-frame; track separate peak for snap decay
+  let bloomPeak = 0.13;
+
+  function updateAudioReactivity(now, delta) {
+    if (!mpPlaying) {
+      bloomPass.strength += (0.13 - bloomPass.strength) * Math.min(delta * 2.5, 0.10);
+      sharedUniforms.uPulseAmp.value += (1.0 - sharedUniforms.uPulseAmp.value) * 0.08;
+      return;
+    }
+
+    const af = isLocalAudio ? getRealAudio() : getSimulatedAudio(now);
+    if (!af) return;
+    const { bass, mid, treble, energy } = af;
+
+    // ── Beat detection & variety ─────────────────────────────────────────────
+    const beatEnergy = detectBeat(energy);
+    if (beatEnergy > 0) {
+      // Normalise beat intensity 0→1 (clamped, relative to threshold)
+      const strength = Math.min(1, beatEnergy / 0.75);
+
+      // Variable pulse duration — strong beats are shorter & snappier
+      PULSE_DUR = 1.8 - strength * 0.7;   // range 1.1 s (hard) → 1.8 s (soft)
+
+      // Variable pulse amplitude — strong beats make stars swell more
+      const pulseAmp = 0.6 + strength * 1.6;   // 0.6 → 2.2
+      sharedUniforms.uPulseAmp.value = pulseAmp;
+      pulseStart = simTime;
+
+      // Cycle through 4 accent types per beat so each hit feels unique
+      const accent = beatAccentIdx % 4;
+      beatAccentIdx++;
+
+      if (accent === 0) {
+        // DOWNBEAT — bloom spike + big pulse (already set above)
+        bloomPeak = 0.13 + bass * 0.72 + mid * 0.20;
+      } else if (accent === 1) {
+        // SNARE — tint flash toward cool/warm opposite of current balance
+        if (!themeTween) {
+          const target = bass > treble ? coolTint : warmTint;
+          sharedUniforms.uTint.value.lerp(target, 0.28 * strength);
+        }
+        bloomPeak = 0.13 + bass * 0.38;
+      } else if (accent === 2) {
+        // HI-HAT — rotation kick + small pulse
+        const baseSpeed = MUSIC_GENRES[mpGenreIdx]?.rotateSpeed ?? 0.20;
+        controls.autoRotateSpeed = baseSpeed + strength * 0.65;
+        sharedUniforms.uPulseAmp.value = 0.5 + strength * 0.6;   // smaller ripple
+        bloomPeak = 0.13 + treble * 0.28;
+      } else {
+        // OFFBEAT — bloom only, no ripple
+        sharedUniforms.uPulseAmp.value = 0.35;   // tiny ripple
+        bloomPeak = 0.13 + energy * 0.55;
+      }
+    }
+
+    // ── Bloom — instant attack to peak, slow exponential decay ───────────────
+    bloomPeak  *= (1 - delta * 1.6);                   // peak decays toward 0.13
+    bloomPeak   = Math.max(0.13, bloomPeak);
+    const bTarget = Math.max(bloomPeak, 0.13 + bass * 0.30 + mid * 0.10);
+    // Attack faster than decay
+    const bloomRate = bTarget > bloomPass.strength ? 0.28 : 0.07;
+    bloomPass.strength += (bTarget - bloomPass.strength) * bloomRate;
+
+    // ── Rotate speed — sustained energy drives it between beats ──────────────
+    const baseSpeed = MUSIC_GENRES[mpGenreIdx]?.rotateSpeed ?? 0.20;
+    const rotTarget = baseSpeed + energy * 0.28;
+    controls.autoRotateSpeed += (rotTarget - controls.autoRotateSpeed) * 0.08;
+
+    // ── Tint drift — warm on bass, cool on treble (between beats) ────────────
+    if (!themeTween) {
+      const warmness = Math.max(0, bass - treble - 0.06);
+      const coolness = Math.max(0, treble - bass - 0.04);
+      if (warmness > 0) sharedUniforms.uTint.value.lerp(warmTint, 0.022 * warmness * 4);
+      if (coolness > 0) sharedUniforms.uTint.value.lerp(coolTint, 0.022 * coolness * 4);
+    }
+
+    // ── Visualizer ───────────────────────────────────────────────────────────
+    if (mpPanelOpen) drawVisualizer(af);
+  }
+
+  // ── Frequency Visualizer canvas ───────────────────────────────────────────
+  const vizCanvas = document.getElementById('mp-viz');
+  const vizCtx    = vizCanvas ? vizCanvas.getContext('2d') : null;
+
+  function resizeViz() {
+    if (!vizCanvas) return;
+    vizCanvas.width  = vizCanvas.offsetWidth  || 262;
+    vizCanvas.height = vizCanvas.offsetHeight || 42;
+  }
+  resizeViz();
+
+  function drawVisualizer(af) {
+    if (!vizCtx) return;
+    const W = vizCanvas.width, H = vizCanvas.height;
+    vizCtx.clearRect(0, 0, W, H);
+
+    if (isLocalAudio && freqData) {
+      // ── Real FFT bars with colour gradient ───────────────────────────────
+      const bins = Math.min(64, freqData.length);
+      const barW = W / bins;
+      for (let i = 0; i < bins; i++) {
+        const v   = freqData[i] / 255;
+        const h   = Math.max(2, v * H);
+        // Gradient: bass = warm amber → treble = cool indigo
+        const hue = 38 + (i / bins) * 190;
+        const sat = 60 + v * 30;
+        const lit = 45 + v * 25;
+        vizCtx.fillStyle = `hsla(${hue},${sat}%,${lit}%,0.85)`;
+        vizCtx.fillRect(i * barW + 0.5, H - h, barW - 1.5, h);
+      }
+    } else {
+      // ── Simulated multi-layer wave — uses per-beat harmonic drift ─────────
+      const { bass, mid, treble } = af;
+      const gid  = MUSIC_GENRES[mpGenreIdx]?.id || 'lofi';
+      const prof = GENRE_PROFILE[gid] || GENRE_PROFILE.lofi;
+      const pts  = 80;
+
+      // Draw one layered waveform per harmonic, blended
+      prof.h.forEach((hf, layer) => {
+        const amp = (layer === 0 ? bass : layer === 1 ? mid : treble) * prof.w[layer];
+        if (amp < 0.03) return;
+        const hue = 195 + layer * 42 + driftPhaseB * 18;
+        vizCtx.beginPath();
+        vizCtx.strokeStyle = `hsla(${hue % 360},75%,65%,${0.72 - layer * 0.18})`;
+        vizCtx.lineWidth   = 1.8 - layer * 0.4;
+
+        for (let i = 0; i <= pts; i++) {
+          const x  = (i / pts) * W;
+          const t  = (i / pts) * Math.PI * (2 + layer * 1.5);
+          // Phase shifts per harmonic so waves don't cancel
+          const ph = layer * 1.05 + driftPhaseA * (layer + 1) * 0.4;
+          const y  = H / 2 - Math.sin(t * hf + ph) * amp * H * 0.42;
+          i === 0 ? vizCtx.moveTo(x, y) : vizCtx.lineTo(x, y);
+        }
+        vizCtx.stroke();
+      });
+
+      // Centre baseline
+      vizCtx.beginPath();
+      vizCtx.strokeStyle = 'rgba(255,255,255,0.06)';
+      vizCtx.lineWidth   = 0.5;
+      vizCtx.moveTo(0, H / 2); vizCtx.lineTo(W, H / 2);
+      vizCtx.stroke();
+    }
+  }
+
+  // ── Local file upload ─────────────────────────────────────────────────────
+  document.getElementById('mp-file-input')?.addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    // Suspend YouTube
+    if (ytReady) { try { ytPlayer.stopVideo(); } catch(e){} }
+    // Release previous blob URL
+    if (localAudio.src && localAudio.src.startsWith('blob:')) URL.revokeObjectURL(localAudio.src);
+    // Wire Web Audio the first time
+    if (!localSource) connectLocal(localAudio);
+    localAudio.src = URL.createObjectURL(file);
+    localAudio.play().catch(() => {});
+    if (audioCtx?.state === 'suspended') audioCtx.resume();
+    isLocalAudio = true;
+    mpPlaying    = true;
+    mpSyncUI();
+    const trackName = file.name.replace(/\.[^.]+$/, '');
+    mpTitleEl.textContent  = trackName;
+    mpChanEl.textContent   = 'Local file';
+    pilTrackEl.textContent = trackName;
+    document.getElementById('mp-upload-lbl').classList.add('local-active');
+    vizCanvas?.classList.add('active');
+    resizeViz();
+    showToast('♪  ' + trackName.toUpperCase().slice(0, 32));
+  });
+
+  localAudio.addEventListener('ended', () => { mpPlaying = false; mpSyncUI(); });
+
+  // ── YouTube URL paste ─────────────────────────────────────────────────────
+  document.getElementById('mp-url-input')?.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    const raw = this.value.trim();
+    const m   = raw.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    if (!m) { showToast('⚠  INVALID YOUTUBE URL'); return; }
+    const vid = m[1];
+    localAudio.pause();
+    isLocalAudio = false;
+    document.getElementById('mp-upload-lbl').classList.remove('local-active');
+    vizCanvas?.classList.remove('active');
+    if (ytReady) {
+      ytPlayer.loadVideoById(vid);
+      mpPlaying = true;
+      mpSyncUI();
+      showToast('♪  LOADING VIDEO');
+    }
+    this.value = '';
+  });
+
+  // ── Override play-toggle to handle local mode ─────────────────────────────
+  (function() {
+    function mpTogglePlayFull() {
+      if (isLocalAudio) {
+        if (mpPlaying) {
+          localAudio.pause();
+          mpPlaying = false;
+        } else {
+          if (audioCtx?.state === 'suspended') audioCtx.resume();
+          localAudio.play().catch(() => {});
+          mpPlaying = true;
+        }
+        mpSyncUI();
+        return;
+      }
+      // YouTube path
+      if (!ytReady) { showToast('♪  SERVE VIA HTTP FOR AUDIO'); return; }
+      if (mpPlaying) {
+        ytPlayer.pauseVideo();
+      } else {
+        ytPlayer.playVideo();
+        mpPlaying = true;
+        mpSyncUI();
+      }
+    }
+    const pbEl = document.getElementById('mp-play-btn');
+    const ppEl = document.getElementById('pill-play');
+    pbEl.removeEventListener('click', mpTogglePlay);
+    ppEl.removeEventListener('click', mpTogglePlay);
+    pbEl.addEventListener('click', mpTogglePlayFull);
+    ppEl.addEventListener('click', mpTogglePlayFull);
+  })();
+
+  // ── Cinematic Tour ────────────────────────────────────────────────────────────
+  const TOUR_STOPS = [
+    {
+      pos: new THREE.Vector3(0, 220, 2), target: new THREE.Vector3(0, 0, 0),
+      travel: 0, hold: 5500,
+      title: 'GALAXIA',
+      body: 'A procedural spiral galaxy of 159,000 stars, rendered in real time with WebGL and GLSL shaders.',
+    },
+    {
+      pos: new THREE.Vector3(10, 20, 26), target: new THREE.Vector3(0, 0, 0),
+      travel: 3000, hold: 5500,
+      title: 'THE CORE',
+      body: 'At the galactic centre lies a supermassive black hole. Its gravity sculpts the entire spiral structure — click it to dive in.',
+    },
+    {
+      pos: new THREE.Vector3(90, 28, 55), target: new THREE.Vector3(48, 4, 26),
+      travel: 3400, hold: 5500,
+      title: 'SPIRAL ARM',
+      body: 'Density waves compress gas and dust into sweeping arms — stellar nurseries where new stars ignite.',
+    },
+    {
+      pos: new THREE.Vector3(0, 5, 172), target: new THREE.Vector3(0, 0, 0),
+      travel: 3200, hold: 5500,
+      title: 'THE DISK',
+      body: 'Seen edge-on the galactic disk is remarkably thin — spanning 100,000 light-years yet barely 1,000 thick.',
+    },
+    {
+      pos: new THREE.Vector3(48, 14, 52), target: new THREE.Vector3(55, 8, 60),
+      travel: 3600, hold: 6000,
+      title: 'STAR FIELD',
+      body: 'Each star carries a spectral class — O, B, A, F, G, K, or M — defining its colour, temperature, and lifetime. Hover any star to inspect it.',
+    },
+    {
+      pos: new THREE.Vector3(0, 95, 188), target: new THREE.Vector3(0, 0, 0),
+      travel: 3000, hold: 5000,
+      title: 'EXPLORE',
+      body: 'Click any star to travel there. Hold W for warp speed. Press T to cycle colour themes. The galaxy is yours.',
+    },
+  ];
+
+  let tourActive     = false;
+  let tourIdx        = 0;
+  let tourPhase      = 'idle';   // 'traveling' | 'holding'
+  let tourPhaseStart = 0;
+  let tourFromPos    = new THREE.Vector3();
+  let tourFromTarget = new THREE.Vector3();
+
+  const tourCardEl    = document.getElementById('tour-card');
+  const tourEyebrowEl = document.getElementById('tour-eyebrow');
+  const tourTitleEl   = document.getElementById('tour-title');
+  const tourBodyEl    = document.getElementById('tour-body');
+  const tourDotsEl    = document.getElementById('tour-dots');
+  const tourBarEl     = document.getElementById('tour-progress-bar');
+  const tourNextEl    = document.getElementById('tour-next');
+
+  TOUR_STOPS.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'tour-dot';
+    tourDotsEl.appendChild(d);
+  });
+
+  function tourShowCard(idx) {
+    const stop = TOUR_STOPS[idx];
+    tourEyebrowEl.textContent = `STOP ${idx + 1} / ${TOUR_STOPS.length}`;
+    tourTitleEl.textContent   = stop.title;
+    tourBodyEl.textContent    = stop.body;
+    tourDotsEl.querySelectorAll('.tour-dot').forEach((d, i) =>
+      d.classList.toggle('active', i === idx)
+    );
+    tourBarEl.style.width = '0%';
+    tourNextEl.textContent = idx === TOUR_STOPS.length - 1 ? 'Finish ✓' : 'Next →';
+    tourCardEl.classList.add('visible');
+  }
+
+  function tourGoTo(idx) {
+    if (idx >= TOUR_STOPS.length) { tourEnd(); return; }
+    tourIdx = idx;
+    const stop = TOUR_STOPS[idx];
+    if (stop.travel === 0) {
+      camera.position.copy(stop.pos);
+      controls.target.copy(stop.target);
+      tourPhase      = 'holding';
+      tourPhaseStart = performance.now();
+      tourShowCard(idx);
+    } else {
+      tourCardEl.classList.remove('visible');
+      tourFromPos.copy(camera.position);
+      tourFromTarget.copy(controls.target);
+      tourPhase      = 'traveling';
+      tourPhaseStart = performance.now();
+    }
+  }
+
+  function updateTour(now) {
+    if (!tourActive) return;
+    const stop = TOUR_STOPS[tourIdx];
+    if (tourPhase === 'traveling') {
+      const t = Math.min((now - tourPhaseStart) / stop.travel, 1);
+      camera.position.lerpVectors(tourFromPos, stop.pos, easeInOutCubic(t));
+      controls.target.lerpVectors(tourFromTarget, stop.target, easeInOutCubic(t));
+      if (t >= 1) { tourPhase = 'holding'; tourPhaseStart = now; tourShowCard(tourIdx); }
+    } else if (tourPhase === 'holding') {
+      const pct = Math.min((now - tourPhaseStart) / stop.hold, 1);
+      tourBarEl.style.width = (pct * 100) + '%';
+      if (pct >= 1) tourGoTo(tourIdx + 1);
+    }
+  }
+
+  function tourStart() {
+    if (tourActive) { tourEnd(); return; }
+    tourActive = true;
+    controls.enabled    = false;
+    controls.autoRotate = false;
+    clearTimeout(idleTimer);
+    tourGoTo(0);
+    showToast('◉  GUIDED TOUR');
+  }
+
+  function tourEnd() {
+    tourActive = false;
+    tourCardEl.classList.remove('visible');
+    controls.enabled = true;
+    idleTimer = setTimeout(() => { controls.autoRotate = true; }, 3000);
+    showToast('◉  TOUR ENDED');
+  }
+
+  document.getElementById('tour-exit').addEventListener('click', tourEnd);
+  document.getElementById('tour-next').addEventListener('click', () => {
+    if (tourIdx === TOUR_STOPS.length - 1) { tourEnd(); return; }
+    tourPhaseStart = performance.now() - TOUR_STOPS[tourIdx].hold; // force hold to expire
+  });
+  document.getElementById('btn-tour').addEventListener('click', tourStart);
+  document.getElementById('btn-music').addEventListener('click', () => mpTogglePanel());
+
+  // ── Galaxy formation reveal ───────────────────────────────────────────────────
+  const FORM_DUR      = 3400;   // ms — total duration of star formation wave
+  const FORM_CAM_DUR  = 3800;   // ms — camera pull-back (slightly longer for smooth settle)
+  const formStartPos  = new THREE.Vector3(0, 220, 2);
+  const formEndPos    = new THREE.Vector3(0, 65, 130);
+  let   formActive    = false;
+  let   formStartTime = 0;
+
+  function updateFormation(now) {
+    if (!formActive) return;
+    const elapsed = now - formStartTime;
+
+    // Star wave — easeOutCubic so it starts fast then slows gracefully
+    const tForm = Math.min(elapsed / FORM_DUR, 1);
+    sharedUniforms.uFormation.value = easeOutCubic(tForm) * 1.18;
+
+    // Camera pull-back — easeInOutCubic for smooth cinematic motion
+    const tCam = Math.min(elapsed / FORM_CAM_DUR, 1);
+    camera.position.lerpVectors(formStartPos, formEndPos, easeInOutCubic(tCam));
+    controls.target.set(0, 0, 0);
+
+    if (tCam >= 1 && tForm >= 1) {
+      formActive = false;
+      sharedUniforms.uFormation.value = 2.0;   // clamp fully visible
+      controls.enabled = true;
+      idleTimer = setTimeout(() => { controls.autoRotate = true; }, 2000);
+    }
+  }
+
+  // ── Splash dismiss ────────────────────────────────────────────────────────────
+  controls.enabled = false;   // lock controls until formation completes
+  const splashEl = document.getElementById('splash');
+  document.getElementById('splash-enter').addEventListener('click', () => {
+    splashEl.classList.add('fade-out');
+    splashEl.addEventListener('transitionend', () => {
+      splashEl.style.display = 'none';
+    }, { once: true });
+
+    // Kick off the formation + camera reveal
+    formStartTime = performance.now();
+    formActive    = true;
+  });
+
+  animate();
+  </script>
+</body>
+</html>
